@@ -61,7 +61,9 @@ class SidebarShell(QWidget):
 
         tag = QLabel("居家平替 · 体测与计划")
         tag.setWordWrap(True)
-        tag.setStyleSheet(f"color: {COLORS['subtext']}; font-size: 11px; background: transparent; padding-bottom: 10px;")
+        tag.setStyleSheet(
+            f"color: {COLORS['subtext']}; font-size: 11px; background: transparent; padding-bottom: 10px;"
+        )
         side.addWidget(tag)
 
         sep = QFrame()

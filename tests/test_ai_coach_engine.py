@@ -6,6 +6,7 @@ ai_coach_engine 规则层单元测试
 
 运行: python -m unittest discover -s tests
 """
+
 import os
 import sys
 import unittest
@@ -81,165 +82,162 @@ class TestVolume(unittest.TestCase):
         self.assertEqual(weekly_set_range(4), (40, 80))
 
     def test_over_limit_requires_trial(self):
-        self.assertEqual(check_weekly_sets(4, 30)['status'], '偏少')
-        self.assertEqual(check_weekly_sets(4, 60)['status'], '区间内')
-        self.assertEqual(check_weekly_sets(4, 120)['status'], '超上限')
+        self.assertEqual(check_weekly_sets(4, 30)["status"], "偏少")
+        self.assertEqual(check_weekly_sets(4, 60)["status"], "区间内")
+        self.assertEqual(check_weekly_sets(4, 120)["status"], "超上限")
 
 
 class TestFailureAndRest(unittest.TestCase):
     def test_compound_never_to_failure(self):
-        self.assertTrue(is_compound('卧推'))
-        self.assertFalse(allows_failure('卧推', last_set=True))
-        self.assertFalse(allows_failure('深蹲', last_set=True))
+        self.assertTrue(is_compound("卧推"))
+        self.assertFalse(allows_failure("卧推", last_set=True))
+        self.assertFalse(allows_failure("深蹲", last_set=True))
 
     def test_isolation_only_last_set(self):
-        self.assertTrue(is_compound('哑铃弯举') is False)
-        self.assertFalse(allows_failure('哑铃弯举', last_set=False))
-        self.assertTrue(allows_failure('哑铃弯举', last_set=True))
+        self.assertTrue(is_compound("哑铃弯举") is False)
+        self.assertFalse(allows_failure("哑铃弯举", last_set=False))
+        self.assertTrue(allows_failure("哑铃弯举", last_set=True))
 
     def test_rest_seconds(self):
-        self.assertGreaterEqual(rest_seconds('深蹲'), 150)
-        self.assertGreaterEqual(rest_seconds('侧平举'), 90)
+        self.assertGreaterEqual(rest_seconds("深蹲"), 150)
+        self.assertGreaterEqual(rest_seconds("侧平举"), 90)
 
 
 class TestCycle(unittest.TestCase):
     def test_cycle_length_from_exposures(self):
         self.assertEqual(determine_cycle_length(3), 8)
-        self.assertEqual(determine_cycle_length(2, '力量'), 10)
+        self.assertEqual(determine_cycle_length(2, "力量"), 10)
         self.assertEqual(determine_cycle_length(1), 12)
 
     def test_deload_week_lighter_than_realization(self):
-        cycle = generate_strength_cycle('卧推', 100, 115, 2)
+        cycle = generate_strength_cycle("卧推", 100, 115, 2)
         deload = [d for d in cycle.days if d.week in cycle.deload_weeks]
-        realiz = [d for d in cycle.days if d.phase == '实现']
-        self.assertTrue(deload, '应至少存在一个节律减载周')
-        self.assertTrue(realiz, '应存在实现阶段')
+        realiz = [d for d in cycle.days if d.phase == "实现"]
+        self.assertTrue(deload, "应至少存在一个节律减载周")
+        self.assertTrue(realiz, "应存在实现阶段")
         for d in deload:
             self.assertLess(d.sets[0].weight, realiz[0].sets[0].weight)
 
     def test_deload_has_signal(self):
-        cycle = generate_strength_cycle('深蹲', 120, 140, 2)
+        cycle = generate_strength_cycle("深蹲", 120, 140, 2)
         self.assertTrue(cycle.deload_weeks)
         self.assertLessEqual(cycle.deload_weeks[-1], cycle.weeks)
 
     def test_short_versions_have_5_and_2_minutes(self):
-        cycle = generate_strength_cycle('卧推', 100, 115, 2)
+        cycle = generate_strength_cycle("卧推", 100, 115, 2)
         day = cycle.days[0]
-        self.assertIn('5', day.short_version_5)
-        self.assertIn('2', day.short_version_2)
+        self.assertIn("5", day.short_version_5)
+        self.assertIn("2", day.short_version_2)
         self.assertTrue(generate_short_version(day, 5))
         self.assertTrue(generate_short_version(day, 2))
 
     def test_warmup_and_rest_present(self):
-        cycle = generate_strength_cycle('卧推', 100, 115, 2)
+        cycle = generate_strength_cycle("卧推", 100, 115, 2)
         day = cycle.days[0]
         self.assertGreaterEqual(len(day.warmup), 3)
         self.assertGreaterEqual(day.rest_seconds, 150)
 
     def test_volume_note_from_sessions(self):
-        cycle = generate_strength_cycle('卧推', 100, 115, 2, sessions_per_week=3)
-        self.assertIn('30-60', cycle.volume_note)
+        cycle = generate_strength_cycle("卧推", 100, 115, 2, sessions_per_week=3)
+        self.assertIn("30-60", cycle.volume_note)
 
 
 class TestReview(unittest.TestCase):
     def _log(self, **kw):
-        base = {'date': '2026-09-16', 'movement': '卧推', 'weight': 80.0,
-                'reps': 8, 'sets': 4, 'rpe': 7.5}
+        base = {"date": "2026-09-16", "movement": "卧推", "weight": 80.0, "reps": 8, "sets": 4, "rpe": 7.5}
         base.update(kw)
         return TrainingLog(**base)
 
     def test_normal_progression_adds_reps(self):
         # 孤立动作在次数区间内 → 双重渐进先加次数
-        r = review_training(self._log(movement='哑铃弯举', reps=8, rpe=8.0),
-                            target_reps=12, rep_window=(8, 12))
-        self.assertEqual(r.judgment, '合适')
-        self.assertEqual(r.progression_type, '加次')
-        self.assertEqual(r.next_prescription['reps'], 9)
+        r = review_training(self._log(movement="哑铃弯举", reps=8, rpe=8.0), target_reps=12, rep_window=(8, 12))
+        self.assertEqual(r.judgment, "合适")
+        self.assertEqual(r.progression_type, "加次")
+        self.assertEqual(r.next_prescription["reps"], 9)
 
     def test_compound_uses_linear_wave_progression(self):
         # 复合主项走线性/波浪推进, 不在复盘里机械加次
-        r = review_training(self._log(movement='卧推', reps=5, rpe=8.0))
-        self.assertEqual(r.progression_type, '线性/波浪')
-        self.assertTrue(r.next_prescription['rpe_path'])
+        r = review_training(self._log(movement="卧推", reps=5, rpe=8.0))
+        self.assertEqual(r.progression_type, "线性/波浪")
+        self.assertTrue(r.next_prescription["rpe_path"])
 
     def test_two_signals_trigger_deload(self):
         log = self._log()
-        signals = {'sleep_worse': True, 'pain': True}
+        signals = {"sleep_worse": True, "pain": True}
         self.assertGreaterEqual(len(deload_signals(log, signals=signals)), 2)
         r = review_training(log, signals=signals)
         self.assertTrue(r.deload_recommended)
-        self.assertEqual(r.progression_type, '减量')
-        self.assertLess(r.next_prescription['weight'], log.weight)
+        self.assertEqual(r.progression_type, "减量")
+        self.assertLess(r.next_prescription["weight"], log.weight)
 
     def test_single_signal_does_not_deload(self):
         log = self._log()
-        signals = {'sleep_worse': True}
+        signals = {"sleep_worse": True}
         self.assertLess(len(deload_signals(log, signals=signals)), 2)
         self.assertFalse(review_training(log, signals=signals).deload_recommended)
 
     def test_danger_signal_holds_training(self):
-        log = self._log(notes='胸部不适并向左臂放射痛')
+        log = self._log(notes="胸部不适并向左臂放射痛")
         self.assertTrue(screen_danger(log.notes))
         r = review_training(log)
         self.assertTrue(r.safety_hold)
-        self.assertEqual(r.progression_type, '暂停')
-        self.assertEqual(r.next_prescription['action'], '先评估再恢复训练')
+        self.assertEqual(r.progression_type, "暂停")
+        self.assertEqual(r.next_prescription["action"], "先评估再恢复训练")
 
     def test_single_stall_does_not_change_structure(self):
         # 单次同重量掉次数 → 只维持观察, 不改周期结构
-        prev = self._log(movement='哑铃弯举', reps=10, rpe=8.0)
-        cur = self._log(movement='哑铃弯举', reps=9, rpe=8.0)
+        prev = self._log(movement="哑铃弯举", reps=10, rpe=8.0)
+        cur = self._log(movement="哑铃弯举", reps=9, rpe=8.0)
         r = review_training(cur, prev_log=prev, target_reps=12, rep_window=(8, 12))
         self.assertFalse(r.deload_recommended)
         self.assertTrue(r.key_findings)
-        self.assertNotEqual(r.progression_type, '结构调整')
+        self.assertNotEqual(r.progression_type, "结构调整")
 
     def test_stall_repeats_are_reported(self):
         # 连续两次可比记录异常 → 怀疑周期结构而非当日状态
-        hist = [{'weight': 80.0, 'reps': 8, 'rpe': 8.0},
-                {'weight': 80.0, 'reps': 7, 'rpe': 9.0}]
-        r = review_training(self._log(movement='哑铃弯举', reps=6, rpe=9.0), history=hist)
+        hist = [{"weight": 80.0, "reps": 8, "rpe": 8.0}, {"weight": 80.0, "reps": 7, "rpe": 9.0}]
+        r = review_training(self._log(movement="哑铃弯举", reps=6, rpe=9.0), history=hist)
         self.assertTrue(r.key_findings)
-        self.assertIn(r.judgment, ('停滞', '合适', '偏重'))
+        self.assertIn(r.judgment, ("停滞", "合适", "偏重"))
 
     def test_review_reports_rule_source(self):
         # 判定口径来自规则层, 可追溯到来源
-        r = review_training(self._log(movement='哑铃弯举', reps=8, rpe=8.0), target_reps=12)
-        self.assertIn('规则层', r.rule_source)
+        r = review_training(self._log(movement="哑铃弯举", reps=8, rpe=8.0), target_reps=12)
+        self.assertIn("规则层", r.rule_source)
 
     def test_review_result_defaults(self):
-        r = ReviewResult('合适', [], {}, '维持')
+        r = ReviewResult("合适", [], {}, "维持")
         self.assertFalse(r.deload_recommended)
         self.assertFalse(r.safety_hold)
 
 
 class TestReturn(unittest.TestCase):
     def test_one_missed_session_no_makeup(self):
-        plan = generate_return_plan(0, 80, '卧推', missed_sessions=1)
-        self.assertEqual(plan.permission, '正常接回')
-        self.assertIn('不补课', plan.normal_version)
+        plan = generate_return_plan(0, 80, "卧推", missed_sessions=1)
+        self.assertEqual(plan.permission, "正常接回")
+        self.assertIn("不补课", plan.normal_version)
 
     def test_two_missed_sessions_use_short_version(self):
-        plan = generate_return_plan(0, 80, '卧推', missed_sessions=2)
-        self.assertIn('30 分钟', plan.degraded_version)
+        plan = generate_return_plan(0, 80, "卧推", missed_sessions=2)
+        self.assertIn("30 分钟", plan.degraded_version)
 
     def test_14_days_degraded_return(self):
-        plan = generate_return_plan(14, 100, '深蹲')
-        self.assertEqual(plan.permission, '降级接回')
-        self.assertIn('48 小时', plan.return_48h)
+        plan = generate_return_plan(14, 100, "深蹲")
+        self.assertEqual(plan.permission, "降级接回")
+        self.assertIn("48 小时", plan.return_48h)
         self.assertEqual(len(plan.exit_conditions), 3)
-        self.assertTrue(plan.exit_conditions.get('upgrade'))
-        self.assertTrue(plan.exit_conditions.get('stop'))
+        self.assertTrue(plan.exit_conditions.get("upgrade"))
+        self.assertTrue(plan.exit_conditions.get("stop"))
 
     def test_56_days_lowest_task(self):
-        plan = generate_return_plan(56, 100, '深蹲')
-        self.assertEqual(plan.permission, '最低任务')
+        plan = generate_return_plan(56, 100, "深蹲")
+        self.assertEqual(plan.permission, "最低任务")
 
     def test_90_days_reset(self):
-        plan = generate_return_plan(90, 100, '深蹲')
-        self.assertEqual(plan.permission, '暂停')
-        self.assertIn('重新建档', plan.normal_version)
+        plan = generate_return_plan(90, 100, "深蹲")
+        self.assertEqual(plan.permission, "暂停")
+        self.assertIn("重新建档", plan.normal_version)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

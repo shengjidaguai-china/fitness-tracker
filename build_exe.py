@@ -74,7 +74,8 @@ if os.path.exists(msyh):
 
 cmd += [
     # 图标: 与 健身监控v9.0.spec 保持一致, 否则 exe 无图标且两个入口行为不同
-    '--icon', os.path.join(HERE, 'fitness_icon.ico'),
+    "--icon",
+    os.path.join(HERE, "fitness_icon.ico"),
     # PySide6: 只收集实际使用的模块 (QtCore/QtGui/QtWidgets 自动发现)
     # matplotlib QtAgg backend 需要 QtSvg
     "--collect-submodules",
@@ -93,9 +94,9 @@ cmd += [
 ]
 
 # 图标缺失时提前报错, 而不是打包出无图标的 exe
-icon_path = os.path.join(HERE, 'fitness_icon.ico')
+icon_path = os.path.join(HERE, "fitness_icon.ico")
 if not os.path.exists(icon_path):
-    print('[WARN] 未找到 fitness_icon.ico, 将跳过图标')
+    print("[WARN] 未找到 fitness_icon.ico, 将跳过图标")
 
 # 排除不需要的 PySide6 子模块 (大幅减小体积)
 PYSIDE6_EXCLUDE = [
