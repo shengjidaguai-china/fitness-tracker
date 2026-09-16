@@ -1,0 +1,53 @@
+# CNB NPC 事件流水线 — fitness-tracker (健身监控 v9.0)
+# 文档: https://docs.cnb.cool/zh/build/npc.html | https://docs.cnb.cool/zh/build/crontab.html
+#
+# 双轨机制 (照搬 28-终极量化交易系统8.4 模式):
+#   1) 手动触发: Issue/PR 评论 @CodeBuddy (勾选「替我上班」后 NPC 获得写权限可提 PR)
+#   2) 自动接管: crontab 每工作日 21:00 触发 roadmap-dev 角色, 按 cairn/ROADMAP.md 排期自主开发
+#
+# 权限说明: crontab/API 等非 @ 事件没有「替我上班」勾选; NPC 写代码/推分支/提 PR
+#   的能力取决于该事件流水线的 CNB_TOKEN 权限 (须 Developer 及以上, 且含 repo-code:rw)。
+
+# ---------- 手动触发 (所有分支兜底) ----------
+$:
+  issue.comment@npc:
+    - docker:
+        image: cnbcool/default-npc:latest
+      stages:
+        - name: npc go
+          type: npc:go
+
+  pull_request.comment@npc:
+    - docker:
+        image: cnbcool/default-npc:latest
+      stages:
+        - name: npc go
+          type: npc:go
+
+# ---------- 自动接管: 每工作日 21:00 定时推进 ROADMAP 排期 ----------
+# 时间可按需调整 (crontab 表达式)。cairn/ROADMAP.md 不存在时 NPC 自动回退读 README + Issues。
+main:
+  "crontab: 0 21 * * 1-5":
+    - name: roadmap-dev-daily
+      docker:
+        image: cnbcool/default-npc:latest
+      stages:
+        - name: npc go
+          type: npc:go
+          options:
+            role: roadmap-dev
+            systemPrompt: |
+              你是本仓库常驻排期开发代理 roadmap-dev。严格按以下流程执行:
+              1. 读 cairn/ROADMAP.md 顶部「最新状态同步」与「当前焦点」+ cairn/LOG.md 最近 5 条
+                 若 cairn/ 不存在, 则读 README.md 顶部版本说明与仓库 Issues 列表找下一个任务
+              2. 判断当前适合自动实施、低风险、不破坏打包与本地数据的开发任务
+              3. 实施 1~2 项: 最小改动 → 补测试/冒烟 → 跑基础校验
+                 (python -m py_compile 改动模块; 如项目已引入 ruff 则一并跑 ruff)
+              4. 推送新分支并创建 PR, PR 标注对应排期编号与验证结果
+              5. 无安全任务或阻塞时, 在评论输出状态说明并结束, 绝不硬改
+              硬约束: 禁改 LICENSE / 个人数据目录(体重体脂监控/ ai_coach/)/
+                 .env* / Git 子模块(Lzheng-fitness / exercises-dataset / BettaFish) / 冻结模块;
+              不提交个人体测或训练数据; 不改 Required Notice 署名行 (PolyForm NC)。
+            userPrompt: |
+              执行今日排期推进: 读取 ROADMAP/README 定位下一个任务并完成,
+              汇报改了什么、对应排期项、如何验证。
