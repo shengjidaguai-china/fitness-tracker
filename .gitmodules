@@ -1,9 +1,6 @@
 [submodule "Lzheng-fitness"]
 	path = Lzheng-fitness
 	url = https://github.com/yuppiez99999/Lzheng-fitness.git
-[submodule "BettaFish"]
-	path = BettaFish
-	url = https://github.com/yuppiez99999/MiroFish.git
 [submodule "exercises-dataset"]
 	path = exercises-dataset
 	url = https://github.com/yuppiez99999/exercises-dataset.git

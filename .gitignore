@@ -26,6 +26,8 @@ weread_2026h1/
 
 # 个人训练系统与 AI 教练个人数据（身体指标、训练记录、复盘）
 体重体脂监控/ai_coach/
+体重体脂监控/ai_coach/*.json.bad
+*.json.bad
 体重体脂监控/个人训练系统/
 体重体脂监控/个人训练系统-system-backups/
 体重体脂监控/报告/
@@ -91,6 +93,10 @@ fitness-tracker-remote/
 build/
 dist/
 *.spec.bak
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
 
 # ── 10. 数据库（本地索引 / 个人数据） ─────────────────
 *.db
