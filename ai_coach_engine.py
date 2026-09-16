@@ -9,10 +9,42 @@ AI 教练核心引擎 v1.0 — 基于 Lzheng-fitness 知识库的本地增肌规
 """
 
 import os
+import sys
 import json
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass, field, asdict
+
+# 训练科学规则层 (v9.1): 可直接运行脚本 与 包内导入 两种场景都能找到
+for _p in (os.path.dirname(os.path.abspath(__file__)),
+           os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fitness_pkg')):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+try:
+    from science import (  # type: ignore
+        ReviewContext, ReviewDecision, review_session, analyze_weekly_volume,
+        evaluate_deload_signals, autoregulated_set, apply_double_progression,
+        build_rpe_path, build_warmup_sets, failure_allowance, rest_seconds,
+        planned_rest_plan, tempo_prescription, load_for_target_reps,
+        reps_to_intensity, rpe_to_rir_text, e1rm_from_set, audit_movement_gaps,
+        classify_movement, min_weight_step, weekly_set_band, detect_stall,
+        detect_plateau, screen_action, VOLUME_STEP, WEEKLY_SET_CEILING,
+    )
+    SCIENCE_AVAILABLE = True
+except Exception:
+    try:
+        from fitness_pkg.science import (  # type: ignore
+            ReviewContext, ReviewDecision, review_session, analyze_weekly_volume,
+            evaluate_deload_signals, autoregulated_set, apply_double_progression,
+            build_rpe_path, build_warmup_sets, failure_allowance, rest_seconds,
+            planned_rest_plan, tempo_prescription, load_for_target_reps,
+            reps_to_intensity, rpe_to_rir_text, e1rm_from_set, audit_movement_gaps,
+            classify_movement, min_weight_step, weekly_set_band, detect_stall,
+            detect_plateau, screen_action, VOLUME_STEP, WEEKLY_SET_CEILING,
+        )
+        SCIENCE_AVAILABLE = True
+    except Exception:
+        SCIENCE_AVAILABLE = False
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 COACH_DIR = os.path.join(BASE_DIR, '体重体脂监控', 'ai_coach')
@@ -95,6 +127,16 @@ class WorkoutSet:
     rpe_start: float = 6.0
     rpe_end: float = 7.0
     set_type: str = '正式组'  # 热身组/顶组/回退组/正式组
+    rpe_path: List[float] = field(default_factory=list)   # 逐组 RPE (首组→末组)
+    rest_seconds: Optional[int] = None                    # 建议组间休息(秒)
+    note: str = ''
+
+    @property
+    def rpe_text(self) -> str:
+        """逐组 RPE 的可读描述, 保留首组→末组结构并标注 RIR。"""
+        if self.rpe_path:
+            return ' → '.join(rpe_to_rir_text(r) for r in self.rpe_path)
+        return f'{self.rpe_start}→{self.rpe_end}'
 
 
 @dataclass
@@ -111,10 +153,29 @@ class WorkoutDay:
     short_version_10: str = ''
     short_version_5: str = ''
     short_version_2: str = ''
-    warmup: List[str] = field(default_factory=list)
-    rest_seconds: int = 150
-    purpose: str = ''
-    checkpoint: str = ''
+    purpose: str = ''                                                # 本周目的
+    checkpoint: str = ''                                             # 技术检查点
+    warmup: List[str] = field(default_factory=list)                   # 热身步骤 (文字)
+    rest_seconds: int = 150                                          # 组间休息下限
+    warmup_sets: List[Dict[str, Any]] = field(default_factory=list)   # 热身流程
+    rest_plan: List[Dict[str, Any]] = field(default_factory=list)     # 组间休息安排
+    failure_note: str = ''                                           # 力竭使用说明
+    tempo: Dict[str, Any] = field(default_factory=dict)               # 节奏/活动范围
+
+    def short_version_seconds(self, seconds: int) -> str:
+        """按秒返回短版处方, 支持 5 分钟以下的最低执行版本。"""
+        base = self.short_version_10 or f'{self.movement} 1组 (仅顶组)'
+        if seconds >= 1800:
+            return self.short_version_30 or base
+        if seconds >= 1200:
+            return self.short_version_20 or base
+        if seconds >= 600:
+            return base
+        if seconds >= 300:
+            return self.short_version_5 or f'{self.movement} 1组 5次 (只保主线, 不补课)'
+        if seconds >= 120:
+            return self.short_version_2 or f'{self.movement} 1组 3次 (启动版, 只要连续性)'
+        return '离训练结束还有 2 分钟时: 只做 1 组主线动作, 记录结果即可'
 
 
 @dataclass
@@ -222,19 +283,13 @@ def allows_failure(movement: str, last_set: bool = False) -> bool:
 
 
 def estimate_1rm(weight: float, reps: int, rpe: float = 7.0) -> float:
-    """Epley 公式 + RPE 调整估算 1RM
+    """由一组记录估算 e1RM (RPE/RIR 口径, 与负荷换算互逆)
 
-    规则: RPE 描述的是「还能再做几次」(RIR), 因此先换算出力竭时可完成的次数
-    再代入 Epley。原实现把当前次数直接当作力竭次数, 会系统性高估 1RM
-    (如 100kg x 5 @8 原算法给 121.7kg, 实际应为 115.5kg)。
+    规则: RPE 描述的是「还能再做几次」(RIR), 先换算到力竭的等效次数再套 Epley;
+    把当前次数直接当力竭次数会系统性高估 (如 100kg×5@8 会算成 121.7kg)。
+    仅作趋势观察, 不替代真实测试。
     """
-    if reps <= 1 and rpe >= 10.0:
-        return weight
-    rir = max(0.0, 10.0 - rpe)          # RPE 10 ≈ 0 RIR, 每降 1 档留 1 次余力
-    reps_to_failure = reps + rir
-    if reps_to_failure <= 1:
-        return round(weight, 1)
-    return weight * (1 + reps_to_failure / 30.0)
+    return e1rm_from_set(weight, reps, rpe)
 
 
 def calc_target_weight(estimated_1rm: float, intensity_pct: float, reps: int) -> float:
@@ -243,11 +298,15 @@ def calc_target_weight(estimated_1rm: float, intensity_pct: float, reps: int) ->
     return round(raw * 2) / 2  # 取 0.5kg 精度
 
 
+# 各阶段强度/次数/组数/RPE 路径/回退组比例
+# 依据: Helms 训练金字塔 Level 2-4 (次序 强度→组数→频率→休息, 组数不要同时动)
+#       Helms Level 3 (减载周: 显著降低疲劳, 不测试极限)
+#       Lzheng 03-渐进与力量周期 (阶段不是固定生理日历; 8 周适合目标单一且暴露频繁)
 PHASE_INTENSITY = {
-    '积累': {'pct': 0.70, 'reps': 8, 'sets': 4, 'rpe': (6, 7)},
-    '强度': {'pct': 0.80, 'reps': 5, 'sets': 4, 'rpe': (7, 8)},
-    '实现': {'pct': 0.88, 'reps': 3, 'sets': 3, 'rpe': (8, 9)},
-    '减量': {'pct': 0.60, 'reps': 5, 'sets': 3, 'rpe': (5, 6)},
+    '积累': {'pct': 0.70, 'reps': 8, 'sets': 4, 'rpe': (6.0, 7.5), 'backoff_pct': 0.90},
+    '强度': {'pct': 0.80, 'reps': 5, 'sets': 4, 'rpe': (7.0, 8.5), 'backoff_pct': 0.90},
+    '实现': {'pct': 0.88, 'reps': 3, 'sets': 3, 'rpe': (8.0, 9.0), 'backoff_pct': 0.92},
+    '减量': {'pct': 0.60, 'reps': 5, 'sets': 2, 'rpe': (5.0, 6.0), 'backoff_pct': 0.90},
 }
 
 
@@ -287,15 +346,17 @@ def generate_strength_cycle(
     weekly_exposures: float = 2,
     start_date: Optional[str] = None,
     sessions_per_week: int = 4,
+    level: str = 'L1',
+    goal: str = '力量',
 ) -> StrengthCycle:
     """生成完整力量周期
 
-    - 周期长度由实际每周暴露次数决定, 不由「想提升力量」自动触发
-    - 周组数按每周训练日数给出起始区间, 区间上限不是必须达到的目标
+    - 周期长度由每周暴露次数与目标共同决定 (determine_cycle_length), 不由「想提升力量」自动触发
+    - 周组数按每周训练日数给出起始区间, 上限不是必须达到的目标
     - 减载: 约每 4 周一次节律减载; 连续 3 个中周期无减载则预防性减载
     """
     exposures = max(1.0, float(weekly_exposures))
-    weeks = determine_cycle_length(int(round(exposures)))
+    weeks = determine_cycle_length(int(round(exposures)), goal)
     dist = distribute_phases(weeks)
     if start_date is None:
         start_date = datetime.now().strftime('%Y-%m-%d')
@@ -328,32 +389,42 @@ def generate_strength_cycle(
             pct = cfg['pct'] + progress * 0.05
             deload = week in deload_weeks
             if deload:
-                # 减载周: 用「减量阶段」强度口径, 显著降低负荷与组数
-                pct = PHASE_INTENSITY['减量']['pct']
-                cfg_sets = max(2, PHASE_INTENSITY['减量']['sets'] - 1)
-                cfg_reps = cfg['reps']
+                # 减载周: 用「减量」强度与组数口径, 保证轻于任何实现周
+                pct = min(pct, PHASE_INTENSITY['减量']['pct'])
+                cfg_sets = max(2, cfg['sets'] - 2)
+                cfg_reps = PHASE_INTENSITY['减量']['reps']
                 cycle.deload_weeks.append(week)
             else:
                 cfg_sets = cfg['sets']
                 cfg_reps = cfg['reps']
 
+            if phase == '减量':
+                # 减量阶段不以强度为先, 避免把减载写成「更重的验证周」
+                pct = min(pct, 0.65)
+
             rpe_start, rpe_end = _phase_rpe_path(phase, i_in_phase + 1, n_weeks)
             if deload:
-                rpe_start, rpe_end = 4.0, 5.0
+                rpe_start, rpe_end = max(4.0, rpe_start - 2.5), max(5.0, rpe_end - 2.5)
 
             w = calc_target_weight(cur_1rm, pct, cfg_reps)
-
+            rpe_path = build_rpe_path(cfg_sets, rpe_start, rpe_end)
             topology = '逐组 RPE' if cfg_sets > 1 else '单组校准'
             top_set = WorkoutSet(
                 weight=w, reps=cfg_reps, sets=1,
-                rpe_start=rpe_start, rpe_end=min(rpe_end, rpe_start + 1.0),
-                set_type='顶组'
+                rpe_start=rpe_path[0], rpe_end=rpe_path[-1],
+                set_type='顶组', rpe_path=rpe_path,
+                rest_seconds=rest_seconds(movement),
+                note=f'{topology}: 顶组用于校准当天状态, 不作为惩罚性追加组',
             )
-            backoff_w = round(w * 0.90 * 2) / 2
+            backoff_w = round(w * cfg['backoff_pct'] * 2) / 2
+            backoff_path = build_rpe_path(
+                max(1, cfg_sets - 1), rpe_start, max(rpe_start, rpe_end - 0.5))
             backoff = WorkoutSet(
                 weight=backoff_w, reps=cfg_reps + 2, sets=max(1, cfg_sets - 1),
-                rpe_start=rpe_start, rpe_end=rpe_end,
-                set_type='回退组'
+                rpe_start=backoff_path[0], rpe_end=backoff_path[-1],
+                set_type='回退组', rpe_path=backoff_path,
+                rest_seconds=rest_seconds(movement),
+                note='回退组是计划内的正式训练量, 顶上不去时用它替代, 不另外追加',
             )
 
             if compound:
@@ -367,15 +438,19 @@ def generate_strength_cycle(
                 week=week, phase=phase, day_name=f'第{week}周',
                 movement=movement, sets=[top_set, backoff],
                 notes=note,
-                rest_seconds=rest,
                 purpose=('建立可重复动作与训练量' if phase == '积累' else
                          '提高较高负荷暴露' if phase == '强度' else
                          '提高专项性, 不让额外疲劳掩盖表现' if phase == '实现' else
                          '显著降低疲劳并建立下一周期基准'),
                 checkpoint=('动作全程可控, 顶组不超过 RPE 9' if phase != '减量' else
                             '训练意愿与恢复回到正常水平'),
+                rest_seconds=rest,
                 warmup=_warmup_steps(movement, w) + (
                     ['本周为节律减载周: 顶组重量与组数已下调'] if deload else []),
+                warmup_sets=build_warmup_sets(cur_1rm),
+                rest_plan=planned_rest_plan(movement, cfg_sets),
+                failure_note=failure_allowance(movement, cfg_sets, cfg_sets)['note'],
+                tempo=tempo_prescription(compound, goal),
             )
             day.short_version_30 = (f'热身 {movement} 空杆/50% 2×5 → {movement} {w}kg '
                                     f'{cfg_sets}×{cfg_reps} @RPE {rpe_start:.0f} (保留顶组+回退组)')
@@ -448,27 +523,35 @@ def screen_danger(text: str) -> bool:
 
 
 def deload_signals(log: 'TrainingLog',
-                   prev_log: Optional['TrainingLog'] = None) -> List[str]:
+                   prev_log: Optional['TrainingLog'] = None,
+                   signals: Optional[Dict[str, Any]] = None) -> List[str]:
     """减载信号: 命中 2 项即减载一周
 
     信号: 不想练(部分完成)、睡眠/恢复差(异常疲劳)、表现下降(掉次数或 RPE 升约一级)、
-          压力大(异常疲劳)、疼痛。
+          压力大(异常疲劳)、疼痛。GUI/API 也可直接传入 signals 字典覆盖勾选结果。
     """
-    signals = []
+    if signals:
+        try:
+            hit = evaluate_deload_signals(signals).get('hit') or []
+            if hit:
+                return list(hit)
+        except Exception:
+            pass
+    signals_hit = []
     if not log.completed:
-        signals.append('不想练/未完成计划组次')
+        signals_hit.append('不想练/未完成计划组次')
     if log.abnormal_fatigue:
-        signals.append('睡眠或恢复明显变差(压力大)')
+        signals_hit.append('睡眠或恢复明显变差(压力大)')
     if log.pain:
-        signals.append('出现疼痛')
+        signals_hit.append('出现疼痛')
     if log.form_broken:
-        signals.append('动作标准持续恶化')
+        signals_hit.append('动作标准持续恶化')
     if prev_log and prev_log.movement == log.movement:
         if log.weight == prev_log.weight and log.reps < prev_log.reps:
-            signals.append('同重量掉次数(表现下降)')
+            signals_hit.append('同重量掉次数(表现下降)')
         elif log.weight == prev_log.weight and log.rpe - prev_log.rpe >= 1.0:
-            signals.append('同组次 RPE 上升约一级')
-    return signals
+            signals_hit.append('同组次 RPE 上升约一级')
+    return signals_hit
 
 
 @dataclass
@@ -482,136 +565,77 @@ class ReviewResult:
     deload_reasons: List[str] = field(default_factory=list)
     safety_hold: bool = False
     needs_more_data: bool = False
+    rule_source: str = '训练科学规则层 (Helms/Schoenfeld/Nuckols/Dan John)'
 
 
-def review_training(log: TrainingLog, prev_log: Optional[TrainingLog] = None) -> ReviewResult:
-    """单次训练复盘 + 渐进超负荷决策
+def review_training(
+    log: TrainingLog,
+    prev_log: Optional[TrainingLog] = None,
+    level: str = 'L1',
+    target_reps: int = 10,
+    target_rpe: float = 8.0,
+    rep_window: Tuple[int, int] = (8, 12),
+    pain_note: str = '',
+    signals: Optional[Dict[str, Any]] = None,
+    history: Optional[List[Dict[str, Any]]] = None,
+    e1rm_trend: Optional[List[float]] = None,
+    weekly_sets: int = 0,
+    is_isolation: Optional[bool] = None,
+) -> ReviewResult:
+    """单次训练复盘 + 下一次处方 (v9.1: 由训练科学规则层统一下判)
 
-    规则:
-    - 一次只优先改变重量、次数或组数中的一个主要变量
-    - 双重渐进: 先把次数提高到范围上限，再增加一个最小重量单位
-    - 复合主项不做力竭, 主要正式组通常不超过 RPE 9
-    - 单次状态差不改结构: 同重量掉次数或同组次 RPE 升约一级, 需**连续两次**才怀疑周期结构
-    - 命中 2 项减载信号 → 减载一周
-    - 危险信号(胸痛/晕厥/麻木/放射痛等) → 暂停普通处方
+    规则来源 (由规则层统一下判, 不再手写 delta):
+    - 安全分流: 疼痛描述命中危险信号 (胸痛/晕厥/麻木/放射痛等) → 暂停常规处方并建议专业评估
+    - Schoenfeld: 多数组保留 1-2 RIR, 力竭只在末组; 一次只改一个主要变量
+    - Helms: 反应式减载清单 (0-1 项前进 / 2+ 项减载); 孤立动作双重渐进
+    - Nuckols: 无足够记录时不编造精确公斤数, 先用 RPE 6-7 选重建立第二个可比样本
+    - Lzheng: 连续两次同类异常才怀疑结构; 单次异常只维持观察
     """
-    findings: List[str] = []
-    next_rx: Dict[str, Any] = {'movement': log.movement, 'rest_seconds': rest_seconds(log.movement)}
+    hist = list(history or [])
+    if prev_log is not None:
+        hist.insert(0, {'weight': prev_log.weight, 'reps': prev_log.reps, 'rpe': prev_log.rpe})
+    hist.append({'weight': log.weight, 'reps': log.reps, 'rpe': log.rpe})
 
-    # ── 安全优先: 危险信号直接暂停常规处方 ──
-    if log.pain and screen_danger(log.pain_desc or log.notes):
-        return ReviewResult(
-            judgment='暂停训练',
-            key_findings=[
-                f'疼痛描述含危险信号: {log.pain_desc or log.notes}',
-                '暂停常规高强度处方, 先获得合适的专业评估',
-                '本工具不作诊断, 不替代医生或康复专业人员',
-            ],
-            next_prescription={'movement': log.movement, 'action': '暂停', 'note': '以专业评估结论为下一步依据'},
-            progression_type='暂停',
-            safety_hold=True,
-            deload_recommended=True,
-            deload_reasons=['危险信号'],
-        )
+    ctx = ReviewContext(
+        movement=log.movement,
+        weight=log.weight,
+        reps=log.reps,
+        sets=log.sets,
+        rpe=log.rpe,
+        target_reps=target_reps if target_reps > 0 else 10,
+        target_rpe=target_rpe if target_rpe > 0 else 8.0,
+        level=level,
+        is_isolation=is_isolation,
+        rep_window=rep_window,
+        completed=log.completed,
+        pain_note=pain_note or log.notes or '',
+        signals=dict(signals or {}),
+        history=hist[:-1],
+        e1rm_trend=list(e1rm_trend or []),
+        weekly_sets=weekly_sets,
+    )
+    decision = review_session(ctx)
 
-    signals = deload_signals(log, prev_log)
-    deload = len(signals) >= 2
+    findings = list(decision.findings)
+    if decision.stall and not decision.stall['is_stall'] and hist and len(hist) < 3:
+        findings.append(f'可比记录只有 {len(hist)} 次, RPE 选重先行, 不编造精确公斤数')
+    if decision.safety:
+        findings.append(decision.safety)
+    deload_reasons = list(decision.deload['hit']) if decision.deload else []
 
-    if not log.completed:
-        findings.append('未完成全部计划组次 → 不补课, 下次按原安排继续')
-        if deload:
-            findings.append('减载信号 ≥2 项, 建议本周直接减载: 重量与组数同步下调')
-        return ReviewResult(
-            judgment='部分完成',
-            key_findings=findings,
-            next_prescription=(dict(next_rx, weight=round(log.weight * 0.85 * 2) / 2,
-                                    reps=log.reps, sets=max(1, log.sets - 1), rpe=6.0)
-                               if deload else
-                               dict(next_rx, weight=log.weight, reps=log.reps,
-                                    sets=log.sets, rpe=log.rpe)),
-            progression_type='减量' if deload else '维持',
-            deload_recommended=deload,
-            deload_reasons=signals,
-        )
-
-    compound = is_compound(log.movement)
-    rir = rpe_to_rir(log.rpe)
-
-    if log.pain or log.form_broken:
-        judgment = '需要观察'
-        if log.pain:
-            findings.append(f'训练中出现疼痛({log.pain_desc or "位置未填"}) → 本次不加重, 先排查动作与器械设置')
-        if log.form_broken:
-            findings.append('动作标准失控 → 降一个最小重量档, 把动作质量放在负重数字之前')
-        next_rx.update({'weight': round(log.weight * 0.9 * 2) / 2, 'reps': log.reps,
-                        'sets': log.sets, 'rpe': min(8.0, log.rpe)})
-        prog = '维持'
-    elif log.rpe >= 9.5:
-        judgment = '偏重'
-        findings.append(f'RPE {log.rpe} 过高 (RIR ≈ {rir})，超过 9.5')
-        findings.append('下次维持重量并降半档 RPE, 关注动作质量而不是负重数字')
-        next_rx.update({'weight': log.weight, 'reps': log.reps, 'sets': log.sets, 'rpe': log.rpe - 0.5})
-        prog = '维持'
-    elif log.rpe <= 6.0:
-        judgment = '偏轻'
-        findings.append(f'RPE {log.rpe} 偏低 (RIR ≈ {rir})，还有较多余力')
-        if log.reps < 12:
-            findings.append('双重渐进: 先加次数到范围上限')
-            next_rx.update({'weight': log.weight, 'reps': log.reps + 1, 'sets': log.sets, 'rpe': log.rpe + 0.5})
-            prog = '加次'
-        else:
-            findings.append('次数已达上限，加重 2.5kg')
-            next_rx.update({'weight': log.weight + 2.5, 'reps': log.reps - 2, 'sets': log.sets, 'rpe': 7.0})
-            prog = '加重'
-    else:
-        judgment = '合适'
-        findings.append(f'RPE {log.rpe} 在合理区间 (7-9), 剩余次数 ≈ {rir}')
-
-        # ── 停滞判定: 连续两次可比记录异常才怀疑结构 ──
-        stall_count = 0
-        if prev_log and prev_log.movement == log.movement:
-            if log.weight == prev_log.weight and (
-                    log.reps < prev_log.reps or log.rpe - prev_log.rpe >= 1.0):
-                stall_count += 1
-        if stall_count >= 1:
-            findings.append('本次同重量表现下降(掉次数或 RPE 升约一级) → 单次异常先看睡眠/压力/休息, 不改结构')
-            next_rx.update({'weight': log.weight, 'reps': log.reps, 'sets': log.sets, 'rpe': log.rpe})
-            prog = '维持'
-        elif prev_log and prev_log.weight == log.weight and prev_log.reps == log.reps:
-            if log.rpe <= prev_log.rpe - 0.5:
-                findings.append('同重量同次数 RPE 下降，可加重 2.5kg')
-                next_rx.update({'weight': log.weight + 2.5, 'reps': log.reps, 'sets': log.sets, 'rpe': 7.5})
-                prog = '加重'
-            else:
-                findings.append('维持当前处方，巩固适应')
-                next_rx.update({'weight': log.weight, 'reps': log.reps, 'sets': log.sets, 'rpe': log.rpe})
-                prog = '维持'
-        else:
-            if log.reps < 10:
-                findings.append('双重渐进: 加 1 次')
-                next_rx.update({'weight': log.weight, 'reps': log.reps + 1, 'sets': log.sets, 'rpe': log.rpe + 0.5})
-                prog = '加次'
-            else:
-                findings.append('次数达上限，加重 2.5kg')
-                next_rx.update({'weight': log.weight + 2.5, 'reps': log.reps - 2, 'sets': log.sets, 'rpe': 7.5})
-                prog = '加重'
-
-    if deload:
-        findings.append(f'命中 {len(signals)} 项减载信号: {"、".join(signals)} → 建议减载一周')
-        next_rx.update({'weight': round(log.weight * 0.85 * 2) / 2, 'reps': log.reps,
-                        'sets': max(1, log.sets - 1), 'rpe': 6.0})
-        prog = '减量'
-
-    if compound:
-        findings.append('复合主项不做力竭, 组间休息 ≥2.5 分钟')
-    else:
-        findings.append('孤立动作仅最后一组可接近力竭, 组间休息 ≥1.5 分钟')
-
-    findings.append('调整方案需你确认后再改周期参数(周次/频率/动作/组数/次数/重量/RPE 路径)')
+    rx = dict(decision.next_prescription)
+    if 'weight' not in rx:
+        rx['weight'] = log.weight
+    rx['movement'] = rx.get('movement') or log.movement
 
     return ReviewResult(
-        judgment=judgment, key_findings=findings, next_prescription=next_rx,
-        progression_type=prog, deload_recommended=deload, deload_reasons=signals,
+        judgment=decision.judgment,
+        key_findings=findings,
+        next_prescription=rx,
+        progression_type=decision.progression_type,
+        deload_recommended=bool(decision.deload and decision.deload['verdict'] != '继续前进'),
+        deload_reasons=deload_reasons,
+        safety_hold=bool(decision.safety),
     )
 
 
@@ -627,29 +651,52 @@ class ReturnPlan:
     normal_version: str
     degraded_version: str
     minimal_version: str
-    next_7_days: List[str]
-    first_step_48h: str = ''            # 48 小时内可完成的第一个具体动作
-    upgrade_condition: str = ''         # 升级条件
-    hold_condition: str = ''            # 维持条件
-    pause_condition: str = ''           # 继续降级或暂停条件
+    next_7_days: List[str] = field(default_factory=list)
+    return_48h: str = ''                                   # 48 小时内可完成的具体动作
+    exit_conditions: Dict[str, str] = field(default_factory=dict)  # 升级/维持/暂停条件
+    no_makeup_note: str = ''                               # 不补课声明
+    first_week_focus: List[str] = field(default_factory=list)      # 第一周只验证这些
     success_criteria: str = '恢复自主判断和稳定执行, 而不是一周回到停训前全部重量'
-    first_week_focus: List[str] = field(default_factory=list)
 
 
-def generate_return_plan(days_off: int, last_weight: float = 0.0,
-                          movement: str = '主项', missed_sessions: int = 0,
-                          condition_changed: bool = False) -> ReturnPlan:
-    """生成停训接回三档方案
+# 停训天数 → (恢复权限, 正常版系数, 降级版系数, 最低版系数)
+# 依据: Lzheng 04-训练中断接回 (正常/降级/最低/暂停 四档权限)
+#       Helms Level 3 (减载不是「补作业」: 保留主线、降低相对压力、不测试极限)
+RETURN_TIERS = (
+    (7, '正常接回', 0.90, 0.85, 0.80),
+    (21, '降级接回', 0.85, 0.75, 0.70),
+    (56, '最低任务', 0.75, 0.65, 0.60),
+)
+
+
+def generate_return_plan(
+    days_off: int,
+    last_weight: float = 0.0,
+    movement: str = '主项',
+    support_movements: Optional[List[str]] = None,
+    weekly_exposures: int = 2,
+    missed_sessions: int = 0,
+    condition_changed: bool = False,
+) -> ReturnPlan:
+    """生成停训接回三档方案 (覆盖多动作 + 48 小时接回 + 升级/维持/暂停条件)
 
     路由阈值: 停训 ≥7 天、连续漏练 3 次、条件或能力明显变化时进入接回流程。
     规则:
-    - 0-6 天: 按原计划继续 (漏 1 次不补课, 漏 2 次用 30 分钟短版接回)
-    - 7-21 天: 正常接回 (原重量 90%)
-    - 22-56 天: 降级接回 (原重量 80%)
-    - 57-84 天: 最低任务 (原重量 70%)
-    - >84 天: 暂停, 重新建档
-    第一周只验证出勤、动作感觉、疼痛反应、主观用力和次日恢复, 不补错过的训练量。
+    - 0 天且未漏练: 按原计划继续
+    - 漏 1 次不补课, 下一次按原顺序继续; 漏 2 次用 30 分钟短版接回
+    - 1-7 天: 正常接回 (原负荷 90%)
+    - 8-21 天: 降级接回 (原负荷 75%-85%)
+    - 22-56 天: 最低任务 (原负荷 60%-75%)
+    - >56 天: 暂停, 先用 RPE 选重重新建立可比样本 (不编造公斤数)
+    - 第一周只验证出勤/动作感觉/疼痛反应/主观用力/次日恢复, 不补错过的训练量
+    - 交付必须包含一个 48 小时内可完成的动作
     """
+    movements = [movement or '主项'] + [m for m in (support_movements or []) if m and m != movement]
+    exposures = max(1, min(int(weekly_exposures or 1), 7))
+
+    def fmt(w: float) -> str:
+        return f'{round(w * 2) / 2}kg' if w > 0 else '自重'
+
     first_week_focus = ['出勤是否稳定', '动作感觉与疼痛反应', '主观用力(RPE)是否可控', '次日恢复情况']
 
     if days_off <= 0 and missed_sessions <= 0:
@@ -658,24 +705,28 @@ def generate_return_plan(days_off: int, last_weight: float = 0.0,
             normal_version='按原计划继续',
             degraded_version='—', minimal_version='—',
             next_7_days=['按当前周期继续训练'],
-            first_step_48h='按原周期下一次安排直接训练, 不做额外补课',
-            upgrade_condition='按周期处方正常推进即可',
-            hold_condition='出现单次异常时先维持, 结合睡眠与压力判断',
-            pause_condition='出现胸痛/晕厥/麻木/放射痛等危险信号 → 暂停并做专业评估',
+            return_48h='按原周期下一次安排直接训练, 不做额外补课',
+            exit_conditions={
+                'upgrade': '按周期处方正常推进即可',
+                'hold': '出现单次异常时先维持, 结合睡眠与压力判断',
+                'stop': '出现胸痛/晕厥/麻木/放射痛等危险信号 → 暂停并做专业评估',
+            },
             first_week_focus=['正常执行即可'],
         )
 
-    if missed_sessions in (1, 2) and days_off < 7:
+    if days_off < 7 and missed_sessions in (1, 2):
         if missed_sessions == 1:
             return ReturnPlan(
                 days_off=days_off, permission='正常接回',
                 normal_version='按原顺序继续, 不补课',
                 degraded_version='—', minimal_version='—',
                 next_7_days=['漏 1 次不补课, 下一次按原顺序继续'],
-                first_step_48h=f'{movement} 按原处方重量完成下次训练',
-                upgrade_condition='完成后按原周期继续推进',
-                hold_condition='RPE 明显高于往常时维持原重量一周',
-                pause_condition='出现危险信号 → 暂停并做专业评估',
+                return_48h=f'{movement} 按原处方重量完成下次训练',
+                exit_conditions={
+                    'upgrade': '完成后按原周期继续推进',
+                    'hold': 'RPE 明显高于往常时维持原重量一周',
+                    'stop': '出现危险信号 → 暂停并做专业评估',
+                },
                 first_week_focus=first_week_focus,
             )
         return ReturnPlan(
@@ -684,80 +735,136 @@ def generate_return_plan(days_off: int, last_weight: float = 0.0,
             degraded_version='使用 30 分钟短版接回',
             minimal_version='—',
             next_7_days=['漏 2 次用原计划的 30 分钟版本接回, 仍不补课'],
-            first_step_48h=f'{movement} 主项 3 组 @RPE 7 (30 分钟短版), 只做当天主线',
-            upgrade_condition='完成 30 分钟版且次日恢复正常 → 回原处方',
-            hold_condition='RPE 超 8 或次日仍疲劳 → 再走一次 30 分钟版',
-            pause_condition='出现危险信号或疼痛加重 → 暂停并做专业评估',
+            return_48h=f'{movement} 主项 3 组 @RPE 7 (30 分钟短版), 只做当天主线',
+            exit_conditions={
+                'upgrade': '完成 30 分钟版且次日恢复正常 → 回原处方',
+                'hold': 'RPE 超 8 或次日仍疲劳 → 再走一次 30 分钟版',
+                'stop': '出现危险信号或疼痛加重 → 暂停并做专业评估',
+            },
             first_week_focus=first_week_focus,
         )
 
-    if days_off <= 7:
-        perm = '正常接回'
-        normal_w, degraded_w, minimal_w = last_weight * 0.90, last_weight * 0.85, last_weight * 0.80
-    elif days_off <= 21:
-        perm = '降级接回'
-        normal_w, degraded_w, minimal_w = last_weight * 0.85, last_weight * 0.75, last_weight * 0.70
-    elif days_off <= 56:
-        perm = '最低任务'
-        normal_w, degraded_w, minimal_w = last_weight * 0.75, last_weight * 0.65, last_weight * 0.60
-    elif days_off <= 84:
-        perm = '最低任务'
-        normal_w, degraded_w, minimal_w = last_weight * 0.70, last_weight * 0.60, last_weight * 0.55
-    else:
+    if days_off > 56:
         return ReturnPlan(
             days_off=days_off, permission='暂停',
-            normal_version='建议重新建档',
-            degraded_version='从 P0 阶段重新开始',
-            minimal_version='先完成动作学习与重量校准',
-            next_7_days=['重新建档', '动作重量校准(RPE 选重)', '生成新计划'],
-            first_step_48h='完成一次 P0 校准训练: 每个动作 2×8 @RPE 6, 记录第二天感觉',
-            upgrade_condition='校准训练后无痛且次日恢复正常 → 生成新计划',
-            hold_condition='任一动作动作明显失控 → 降重量继续校准',
-            pause_condition='出现危险信号 → 暂停并做专业评估',
+            normal_version='建议重新建档, 先用 RPE 选重建立可比样本',
+            degraded_version='从 P0 阶段重新开始动作学习与基准记录',
+            minimal_version='先完成动作学习, 暂不做接近力竭的组',
+            return_48h=f'{movements[0]} 空杆/最轻负荷 3×5 @RPE 5 (只找动作感觉)',
+            exit_conditions={
+                'upgrade': '动作无痛、技术稳定且次日恢复正常 → 下一周按最低版负荷推进',
+                'hold': '疼痛或技术不稳 → 维持轻负荷技术练习',
+                'stop': '出现危险信号 → 暂停并寻求专业评估',
+            },
+            next_7_days=['重新建档', '动作重量校准 (RPE 6-7 选重)', '生成新计划'],
             first_week_focus=first_week_focus,
         )
 
-    def fmt(w):
-        return f'{round(w*2)/2}kg' if w > 0 else '自重'
+    perm, normal_r, degraded_r, minimal_r = '正常接回', 0.90, 0.85, 0.80
+    for threshold, name, nr, dr, mr in RETURN_TIERS:
+        if days_off <= threshold:
+            perm, normal_r, degraded_r, minimal_r = name, nr, dr, mr
+            break
 
-    plan = ReturnPlan(
-        days_off=days_off, permission=perm,
-        normal_version=f'{movement} {fmt(normal_w)} 3×8 @7 (正常版)',
-        degraded_version=f'{movement} {fmt(degraded_w)} 3×10 @6 (降级版)',
-        minimal_version=f'{movement} {fmt(minimal_w)} 2×12 @5 (最低版)',
-        next_7_days=[
-            f'第1天: {fmt(degraded_w)} 3×10 @6 (找回感觉, 不测极限)',
-            f'第3天: {fmt(normal_w)} 4×8 @7 (感觉正常才加组)',
-            f'第5天: {fmt(normal_w)} 4×6 @7.5 (接近原强度, 仍留 1-2 RIR)',
-            '第7天: 评估恢复与意愿, 再决定是否回原周期',
-        ],
-        first_step_48h=(f'48 小时内先做 1 次: {movement} {fmt(degraded_w)} 3×10 @RPE 6 '
-                        f'(组间休息 ≥2 分钟), 做完记录次日感觉'),
-        upgrade_condition='48 小时版本完成且次日无异常疲劳、无疼痛 → 第 3 天可加组或回到正常版',
-        hold_condition='RPE 高于预期或次日仍疲劳 → 维持当前档位再练 1-2 次, 不加量',
-        pause_condition=('疼痛加重/胸痛/晕厥/麻木/放射痛或明显功能受限 → 暂停普通处方并做专业评估; '
-                         '再次中断 ≥7 天 → 重新走接回流程'),
-    )
+    lines = {}
+    for label, ratio, rpe in (('normal', normal_r, 7.0), ('degraded', degraded_r, 6.5),
+                              ('minimal', minimal_r, 6.0)):
+        lines[label] = ' / '.join(
+            f'{m} {fmt(last_weight * ratio)} 3×8 @{rpe_to_rir_text(rpe)}'
+            if m == movements[0] and last_weight > 0
+            else f'{m} 保留主线 2×10 @{rpe_to_rir_text(rpe)}'
+            for m in movements
+        )
+
+    day_plan = []
+    for i in range(exposures):
+        day_no = 1 + i * max(1, 7 // exposures)
+        if i == 0:
+            day_plan.append(f'第{day_no}天: 降级版 — {lines["degraded"]} (找回感觉, 不追求负荷)')
+        elif i == 1:
+            day_plan.append(f'第{day_no}天: 正常版 — {lines["normal"]} (恢复正常节奏)')
+        else:
+            day_plan.append(f'第{day_no}天: 正常版 — {lines["normal"]} (进入原周期, 保留 1–2 RIR)')
+
+    if missed_sessions == 2:
+        day_plan.insert(0, '漏 2 次: 这一次走 30 分钟短版, 不补课、不加倍')
     if condition_changed:
-        plan.next_7_days.insert(0, '训练条件或能力已变化: 先按最低版完成 1 次, 再决定是否升级')
-    return plan
+        day_plan.insert(0, '训练条件或能力已变化: 先按最低版完成 1 次, 再决定是否升级')
+
+    return ReturnPlan(
+        days_off=days_off,
+        permission=perm,
+        normal_version=lines['normal'],
+        degraded_version=lines['degraded'],
+        minimal_version=lines['minimal'],
+        return_48h=(f'{movements[0]} {fmt(last_weight * degraded_r)} 3×8 @{rpe_to_rir_text(6.5)}'
+                    ' (48 小时内先完成这一次)'),
+        exit_conditions={
+            'upgrade': '动作质量稳定、RPE ≤ 目标且次日恢复正常 → 下一周回到正常版负荷',
+            'hold': 'RPE 超标或次日明显疲劳 → 维持降级版一周',
+            'stop': '疼痛/异常气短/麻木等信号 → 暂停常规处方并寻求专业评估',
+        },
+        next_7_days=day_plan + ['第7天: 评估出勤/动作感觉/疼痛反应/主观用力/次日恢复, 再决定是否回到原周期'],
+        no_makeup_note='第一周不补错过的训练量, 不测试极限, 不随机更换全部动作',
+        first_week_focus=first_week_focus,
+    )
 
 
 def generate_short_version(workout: WorkoutDay, minutes: int) -> str:
-    """生成最低执行版本
+    """生成最低执行版本 (v9.1: 支持 2/5/10/20/30 分钟档)
 
-    规则: 短版优先保留当天主线，不补课、不加倍训练、不用惩罚性有氧
+    规则:
+    - 短版优先保留当天主线, 不补课、不加倍训练、不用惩罚性有氧
+    - 时间不足时按 Helms Level 5 先减少低优先级附件, 不压缩复合主项的组间休息
+    - 孤立/低风险附件可用拮抗肌配对组省时, 复合主项不要在组间插入其他训练
     """
-    if minutes >= 30:
-        return workout.short_version_30 or f'{workout.movement} 主项 3组 (保留顶组+1组回退)'
-    elif minutes >= 20:
-        return workout.short_version_20 or f'{workout.movement} 主项 2组 (仅顶组+1组)'
-    elif minutes >= 10:
-        return workout.short_version_10 or f'{workout.movement} 主项 1组 (仅顶组)'
-    elif minutes >= 5:
-        return workout.short_version_5 or f'{workout.movement} 1×5 @RPE 6 (最小维持剂量)'
-    else:
-        return workout.short_version_2 or f'{workout.movement} 热身激活 1×8 (只用 2 分钟保持连续性)'
+    seconds = max(0, int(minutes)) * 60
+    return workout.short_version_seconds(seconds)
+
+
+def generate_short_plan(workout: WorkoutDay, minutes: int) -> Dict[str, Any]:
+    """短版的完整可序列化明细 (含保留/舍弃规则与休息建议)。"""
+    kind = classify_movement(workout.movement)
+    lo, hi = rest_seconds(workout.movement)
+    return {
+        'minutes': int(minutes),
+        'prescription': generate_short_version(workout, minutes),
+        'keep': '当天主线动作与顶组',
+        'drop': '低优先级附件与泵感类补充 (先减附件, 不压缩复合主项的组间休息)',
+        'rest': f'{lo//60}–{hi//60} 分钟' if hi >= 120 else f'{lo} 秒',
+        'super_set': '可与拮抗肌动作配对省时' if kind == 'isolation' else '不要在组间插入其他训练',
+        'rules': [
+            '漏 1 次按原顺序继续, 不补课',
+            '漏 2 次用 30 分钟或状态差版接回',
+            '达到 7 天或连续漏 3 次 → 走停训接回流程',
+            '不用惩罚性有氧弥补',
+        ],
+    }
+
+
+def _export_cycle_week_rows(d) -> List[str]:
+    """导出周期 Markdown 的每周训练表行 (供 export_cycle_to_markdown 复用)。"""
+    lines = []
+    if d.purpose:
+        lines.append(f'目的: {d.purpose}')
+    lines.append('| 组类型 | 重量 | 组×次 | RPE 路径 | 组间休息 |')
+    lines.append('|:------|:-----|:------|:---------|:---------|')
+    for st in d.sets:
+        rest_txt = f'{st.rest_seconds // 60} 分钟' if st.rest_seconds else '按需'
+        lines.append(f'| {st.set_type} | {st.weight}kg | {st.sets}×{st.reps} | {st.rpe_text} | {rest_txt} |')
+    if d.warmup_sets:
+        lines.append('')
+        lines.append('热身: ' + ' / '.join(
+            f'{(w["label"] if w["weight"] <= 0 else str(w["weight"]) + "kg")} {w["reps"]}次'
+            for w in d.warmup_sets))
+    if d.checkpoint:
+        lines.append(f'技术检查点: {d.checkpoint}')
+    if d.failure_note:
+        lines.append(f'力竭使用: {d.failure_note}')
+    if d.tempo:
+        lines.append(f'节奏/幅度: 离心 {d.tempo.get("eccentric", "")}, 向心 {d.tempo.get("concentric", "")}, '
+                     f'{d.tempo.get("note", "")}')
+    return lines
 
 
 # ═══════════════════════════════════════════════════════════
@@ -894,28 +1001,79 @@ def export_cycle_to_markdown(cycle: StrengthCycle) -> str:
         lines.append('')
         if d.purpose:
             lines.append(f'目的: {d.purpose}')
-        lines.append(f'组间休息: ≥{d.rest_seconds // 60} 分钟')
+        lines.append('| 组类型 | 重量 | 组×次 | RPE 路径 | 组间休息 |')
+        lines.append('|:------|:-----|:------|:---------|:---------|')
+        for st in d.sets:
+            rest_txt = f'{st.rest_seconds // 60} 分钟' if st.rest_seconds else '按需'
+            lines.append(f'| {st.set_type} | {st.weight}kg | {st.sets}×{st.reps} | {st.rpe_text} | {rest_txt} |')
+        if d.warmup_sets:
+            lines.append('')
+            lines.append('热身: ' + ' / '.join(
+                f'{(w["label"] if w["weight"] <= 0 else str(w["weight"]) + "kg")} {w["reps"]}次'
+                for w in d.warmup_sets))
         if d.checkpoint:
             lines.append(f'技术检查点: {d.checkpoint}')
-        lines.append('')
-        if d.warmup:
-            lines.append('热身: ' + ' → '.join(d.warmup))
-            lines.append('')
-        lines.append('| 组类型 | 重量 | 组×次 | RPE |')
-        lines.append('|:------|:-----|:------|:----|')
-        for st in d.sets:
-            lines.append(f'| {st.set_type} | {st.weight}kg | {st.sets}×{st.reps} | {st.rpe_start}→{st.rpe_end} |')
+        if d.failure_note:
+            lines.append(f'力竭使用: {d.failure_note}')
+        if d.tempo:
+            lines.append(f'节奏/幅度: 离心 {d.tempo.get("eccentric", "")}, 向心 {d.tempo.get("concentric", "")}, '
+                         f'{d.tempo.get("note", "")}')
         lines.extend([
             '',
-            '短版:',
+            '短版 (不补课):',
             f'- 30分钟: {d.short_version_30}',
             f'- 20分钟: {d.short_version_20}',
             f'- 10分钟: {d.short_version_10}',
-            f'- 5分钟: {d.short_version_5}',
-            f'- 2分钟: {d.short_version_2}',
+            f'- 5分钟: {d.short_version_seconds(300)}',
+            f'- 2分钟: {d.short_version_seconds(120)}',
             '',
         ])
+    lines.extend([
+        '## 科学依据',
+        '',
+        '- Helms《训练金字塔 v2.0》: 每肌群/动作模式每周 10–20 组起始区间; 组间休息小肌群 ≥1.5 min、复合主项 ≥2.5 min; 反应式减载清单 0–1 项前进 / 2+ 项减载',
+        '- Schoenfeld: 多数组保留 1–2 RIR, 力竭只在末组; 一次只改一个主要变量并观察 2–4 周',
+        '- Nuckols: 训练量是可检验剂量而非固定靶值; AMRAP/e1RM 趋势评估优于频繁硬测 1RM',
+        '- Lzheng: 连续两次同类异常才怀疑结构; 阶段不是固定生理日历',
+        '',
+        '## 验证方式',
+        '',
+        '- 成功不等于最终 1RM: 检查目标负荷下的动作质量、RPE、完成率、恢复与有效暴露',
+        '- 无可靠记录时先用 RPE 6–7 选重建立第二个可比样本, 不编造精确公斤数',
+        '- 出现疼痛或危险信号 (胸痛/晕厥/麻木/放射痛等) 时暂停常规高强度处方并寻求专业评估',
+        '',
+    ])
     path = os.path.join(COACH_DIR, f'周期_{cycle.movement}_{cycle.start_date}.md')
     with open(path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines))
     return path
+
+# ═══════════════════════════════════════════════════════════
+# 八、编排与自检 (v9.1)
+# ═══════════════════════════════════════════════════════════
+
+def build_weekly_volume_report(level: str, muscle_sets: Dict[str, int]) -> Dict[str, Any]:
+    """按训练等级检查每个肌群的周组数是否落在起始区间 (Helms 10–20 组)。"""
+    items = []
+    for muscle, sets in (muscle_sets or {}).items():
+        items.append({'muscle': muscle, **analyze_weekly_volume(level, sets)})
+    return {'level': (level or 'P0').upper(), 'items': items}
+
+
+def coach_diagnostics() -> Dict[str, Any]:
+    """引擎自检: 科学规则层是否可用 + 关键规则的当前取值 (供 GUI / CI 展示)。"""
+    if SCIENCE_AVAILABLE:
+        return {
+            'science_layer': True,
+            'rpe_scheme': 'RPE 10 = 0 RIR, 9 ≈ 1 RIR, 8 ≈ 2 RIR, 7 ≈ 3 RIR',
+            'weekly_set_bands': {k: weekly_set_band(k) for k in ('P0', 'L1', 'L2', 'L3')},
+            'weekly_set_ceiling': WEEKLY_SET_CEILING,
+            'volume_step': VOLUME_STEP,
+            'deload_threshold': f'2 项及以上反应式减载信号 → 减载一周; 连续 3 个中周期未减载 → 预防性减载',
+            'rest_seconds': {'compound': rest_seconds('深蹲'), 'isolation': rest_seconds('弯举')},
+            'failure_policy': '复合主项常规不做力竭; 孤立动作仅末组可接近力竭',
+        }
+    return {
+        'science_layer': False,
+        'hint': 'fitness_pkg/science.py 未加载, 已降级为 v9.0 的旧规则',
+    }

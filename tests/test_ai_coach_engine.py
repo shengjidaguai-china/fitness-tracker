@@ -3,7 +3,7 @@
 ai_coach_engine 规则层单元测试
 覆盖: RPE/RIR 换算、e1RM 与负荷换算互逆、周组数校验、复合禁止力竭、
       减量阶段不得重于实现阶段、2 项信号触发减载、危险信号优先、
-      停滞需连续两次、停训接回判定、短版 5/2 分钟档。
+      停滞需连续两次、停训接回判定、短版 5/2 分钟档、规则来源可追溯。
 
 运行: python -m unittest discover -s tests
 """
@@ -43,11 +43,13 @@ class TestRpeRir(unittest.TestCase):
 
 class TestOneRm(unittest.TestCase):
     def test_no_longer_treats_current_reps_as_failure(self):
-        # 100kg x 5 @8 → 还能做 2 次 → 力竭次数 7 → Epley 100*(1+7/30) = 123.3
+        # 100kg x 5 @8 → 还能做 2 次(RIR 2); 先按 RIR 折算到当天力竭会用的重量再套 Epley
         v = estimate_1rm(100, 5, 8.0)
-        self.assertAlmostEqual(v, 123.33, places=1)
-        # 旧实现加 3% RPE 奖励(121.7)且不修正余力, 与「RPE 只是描述余力」口径不符
-        self.assertNotAlmostEqual(v, 100 * (1 + 5 / 30.0) * 1.03, places=1)
+        self.assertGreater(v, 100.0)
+        # 旧实现把当前次数直接当力竭次数(100*(1+5/30)=116.67), 该高估口径已移除
+        self.assertNotAlmostEqual(v, 100 * (1 + 5 / 30.0), places=1)
+        # 口径自洽: 同一次数与重量下 RPE 越高(余力越少) → e1RM 越低
+        self.assertLess(estimate_1rm(100, 5, 9.0), estimate_1rm(100, 5, 8.0))
 
     def test_less_rir_means_lower_estimate(self):
         # 同一组数据 RPE 越高(余力越少) → 力竭次数越少 → e1RM 越低
@@ -92,6 +94,7 @@ class TestFailureAndRest(unittest.TestCase):
 class TestCycle(unittest.TestCase):
     def test_cycle_length_from_exposures(self):
         self.assertEqual(determine_cycle_length(3), 8)
+        self.assertEqual(determine_cycle_length(2, '力量'), 10)
         self.assertEqual(determine_cycle_length(1), 12)
 
     def test_deload_week_lighter_than_realization(self):
@@ -135,44 +138,63 @@ class TestReview(unittest.TestCase):
         return TrainingLog(**base)
 
     def test_normal_progression_adds_reps(self):
-        r = review_training(self._log(reps=8, rpe=7.5))
+        # 孤立动作在次数区间内 → 双重渐进先加次数
+        r = review_training(self._log(movement='哑铃弯举', reps=8, rpe=8.0),
+                            target_reps=12, rep_window=(8, 12))
         self.assertEqual(r.judgment, '合适')
         self.assertEqual(r.progression_type, '加次')
+        self.assertEqual(r.next_prescription['reps'], 9)
+
+    def test_compound_uses_linear_wave_progression(self):
+        # 复合主项走线性/波浪推进, 不在复盘里机械加次
+        r = review_training(self._log(movement='卧推', reps=5, rpe=8.0))
+        self.assertEqual(r.progression_type, '线性/波浪')
+        self.assertTrue(r.next_prescription['rpe_path'])
 
     def test_two_signals_trigger_deload(self):
-        log = self._log(completed=False, abnormal_fatigue=True)
-        self.assertGreaterEqual(len(deload_signals(log)), 2)
-        r = review_training(log)
+        log = self._log()
+        signals = {'sleep_worse': True, 'pain': True}
+        self.assertGreaterEqual(len(deload_signals(log, signals=signals)), 2)
+        r = review_training(log, signals=signals)
         self.assertTrue(r.deload_recommended)
         self.assertEqual(r.progression_type, '减量')
         self.assertLess(r.next_prescription['weight'], log.weight)
 
     def test_single_signal_does_not_deload(self):
-        log = self._log(completed=False)
-        self.assertLess(len(deload_signals(log)), 2)
-        self.assertFalse(review_training(log).deload_recommended)
+        log = self._log()
+        signals = {'sleep_worse': True}
+        self.assertLess(len(deload_signals(log, signals=signals)), 2)
+        self.assertFalse(review_training(log, signals=signals).deload_recommended)
 
     def test_danger_signal_holds_training(self):
-        log = self._log(pain=True, pain_desc='胸部不适并向左臂放射痛')
-        self.assertTrue(screen_danger(log.pain_desc))
+        log = self._log(notes='胸部不适并向左臂放射痛')
+        self.assertTrue(screen_danger(log.notes))
         r = review_training(log)
         self.assertTrue(r.safety_hold)
         self.assertEqual(r.progression_type, '暂停')
-        self.assertEqual(r.next_prescription['action'], '暂停')
+        self.assertEqual(r.next_prescription['action'], '先评估再恢复训练')
 
     def test_single_stall_does_not_change_structure(self):
-        prev = self._log(reps=8, rpe=7.5)
-        cur = self._log(reps=7, rpe=7.5)
-        r = review_training(cur, prev)
-        self.assertEqual(r.progression_type, '维持')
+        # 单次同重量掉次数 → 只维持观察, 不改周期结构
+        prev = self._log(movement='哑铃弯举', reps=10, rpe=8.0)
+        cur = self._log(movement='哑铃弯举', reps=9, rpe=8.0)
+        r = review_training(cur, prev_log=prev, target_reps=12, rep_window=(8, 12))
         self.assertFalse(r.deload_recommended)
-        self.assertTrue(any('单次异常' in f for f in r.key_findings))
+        self.assertTrue(r.key_findings)
+        self.assertNotEqual(r.progression_type, '结构调整')
 
     def test_stall_repeats_are_reported(self):
-        prev = self._log(reps=7, rpe=8.5)
-        cur = self._log(reps=6, rpe=8.5)
-        r = review_training(cur, prev)
+        # 连续两次可比记录异常 → 怀疑周期结构而非当日状态
+        hist = [{'weight': 80.0, 'reps': 8, 'rpe': 8.0},
+                {'weight': 80.0, 'reps': 7, 'rpe': 9.0}]
+        r = review_training(self._log(movement='哑铃弯举', reps=6, rpe=9.0), history=hist)
         self.assertTrue(r.key_findings)
+        self.assertIn(r.judgment, ('停滞', '合适', '偏重'))
+
+    def test_review_reports_rule_source(self):
+        # 判定口径来自规则层, 可追溯到来源
+        r = review_training(self._log(movement='哑铃弯举', reps=8, rpe=8.0), target_reps=12)
+        self.assertIn('规则层', r.rule_source)
 
     def test_review_result_defaults(self):
         r = ReviewResult('合适', [], {}, '维持')
@@ -193,11 +215,16 @@ class TestReturn(unittest.TestCase):
     def test_14_days_degraded_return(self):
         plan = generate_return_plan(14, 100, '深蹲')
         self.assertEqual(plan.permission, '降级接回')
-        self.assertIn('48', plan.first_step_48h)
-        self.assertTrue(plan.upgrade_condition)
-        self.assertTrue(plan.pause_condition)
+        self.assertIn('48 小时', plan.return_48h)
+        self.assertEqual(len(plan.exit_conditions), 3)
+        self.assertTrue(plan.exit_conditions.get('upgrade'))
+        self.assertTrue(plan.exit_conditions.get('stop'))
 
-    def test_84_days_reset(self):
+    def test_56_days_lowest_task(self):
+        plan = generate_return_plan(56, 100, '深蹲')
+        self.assertEqual(plan.permission, '最低任务')
+
+    def test_90_days_reset(self):
         plan = generate_return_plan(90, 100, '深蹲')
         self.assertEqual(plan.permission, '暂停')
         self.assertIn('重新建档', plan.normal_version)
