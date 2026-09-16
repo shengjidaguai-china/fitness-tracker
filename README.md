@@ -107,7 +107,7 @@
 
 ### 训练科学规则层 `fitness_pkg/science.py`
 
-把 Lzheng-fitness 知识库里的判断规则收敛为**可配置、可测试**的参数（标准库 unittest 覆盖 `tests/test_ai_coach_engine.py` / `test_fitness_pkg.py` + `tests/smoke_check.py` 冒烟）。
+把 Lzheng-fitness 知识库里的判断规则收敛为**可配置、可测试**的参数（`tests/` 下用例覆盖规则层 / AI 引擎 / 数据层 / 解析器 / 计划视图 + `tests/smoke_check.py` 冒烟）。
 
 | 规则 | 口径 | 来源 |
 |:-----|:-----|:-----|
@@ -125,6 +125,22 @@
 | 短版训练 | 保留当天主线、先减附件、不压缩复合主项休息；漏 1 次不补课、漏 2 次用短版接回 | Lzheng 04；Helms Level 5 |
 
 **口径提示**：全部负荷与 1RM 都是**估算起点**，真正准的是每次训练的 RPE 反馈，别用公式替代记录。
+
+### 22 周计划的科学化视图 `fitness_pkg/plan_science.py`
+
+把规则层接到「22 周居家平替计划」的展示口径上，供训练计划页与报告共用同一套判断。
+
+**关键口径**：Helms 的 10–20 组/周是**每周每肌群**计量，而周计划正文写的是「单次训练该动作做几组」，
+两者不是同一个量纲。所以这里只在能确定频率时才算周组数——`estimate_weekly_sets` 先把一周 7 天各自的动作表
+汇总，再与起始区间比对；解析不到有效组次（休息周或文档缺失）时返回**「不判定」**，不误报「练得太少」。
+
+| 能力 | 说明 |
+|:-----|:-----|
+| 组次解析 | `parse_group_spec` 兼容「4×8-10」「4组×8-10次」「3x12」「5组」「4 循环」，解析不出返回 0 组交给调用方降级 |
+| 肌群归类 | `muscle_bucket_of` 按最长关键词匹配（避免「引体」被「臂屈伸」抢走），归类不了的动作进 `unclassified` 而不是静默计入 |
+| 周组数判定 | `weekly_volume_status` 给出 偏少/合适/偏高/超出验证区间 四档结论与调整方向，区间来自 `weekly_set_band(level)` |
+| 周视图元数据 | `week_display_meta` 给出阶段口径、是否减载周、组数保留比例、力竭策略、短版接回规则 |
+| 减载指引 | `deload_guidance` 复用规则层的反应式清单（命中 2 项即减载一周），不在视图层另立阈值 |
 
 ```mermaid
 flowchart LR
@@ -197,7 +213,7 @@ python -m PyInstaller 健身监控v9.0.spec --noconfirm --clean
 |:-----|:------------|:-----|
 | **ruff** | [astral-sh/ruff](https://github.com/astral-sh/ruff) | 极速 Python lint + formatter（替代 flake8/black/isort） |
 | **pre-commit** | [pre-commit/pre-commit](https://github.com/pre-commit/pre-commit) | git 提交钩子，自动跑通用检查 + ruff |
-| **pytest** | [pytest-dev/pytest](https://github.com/pytest-dev/pytest) | 60 项单元/构造冒烟测试（数据层/解析器/AI 引擎） |
+| **pytest** | [pytest-dev/pytest](https://github.com/pytest-dev/pytest) | 单元/构造冒烟测试（数据层/解析器/规则层/计划科学视图/AI 引擎），用例数由采集结果给出 |
 
 ```bash
 # 一次性安装钩子（此后每次 git commit 自动检查）
@@ -332,8 +348,9 @@ python Lzheng-fitness/tools/install.py --platform codex --all
 ├── fitness_modules.py               # 兼容层：re-export fitness_pkg（旧调用方无需改动）
 ├── fitness_pkg/                     # 核心包（模型/动作库/解析器/弹窗/页面/AI教练页）
 ├── fitness_pkg/science.py           # 训练科学规则层（RPE/RIR、周组数、减载、停滞、缺口审计）
+├── fitness_pkg/plan_science.py      # 22 周计划的科学化视图（组次解析/肌群归类/周组数判定/减载周展示）
 ├── ai_coach_engine.py               # AI 教练引擎（P0-L3/周期/复盘/接回/短版 + 规则层）
-├── tests/                           # smoke_check.py 冒烟 + pytest 用例（缺 GUI 依赖自动跳过）
+├── tests/                           # smoke_check.py 冒烟 + 单元/构造用例（缺 GUI 依赖自动跳过）
 ├── cairn/                           # ROADMAP 与开发日志（NPC 自动开发排期事实源）
 ├── 健身监控v9.0.spec                 # PyInstaller 主打包配置（正式版）
 ├── 健身监控_debug.spec               # 调试打包配置（带控制台，便于排查启动异常）
@@ -367,14 +384,16 @@ python Lzheng-fitness/tools/install.py --platform codex --all
 # 冒烟: py_compile 全部核心模块 + 规则层断言 + 引擎端到端 + 4 项口径不变量
 python tests/smoke_check.py
 
-# 单元测试: RPE/RIR、e1RM 互逆、周组数、周期/减载、安全分流、复盘、接回、短版
+# 单元测试: RPE/RIR、e1RM 互逆、周组数与区间判定、周期/减载、组次解析、安全分流、复盘、接回、短版
 python -m pytest tests
 python -m unittest discover -s tests   # 与上同源, 不装 pytest 时可用
 ```
 
-> 规则层口径已收敛到 `fitness_pkg/science.py` 单一来源, 引擎与 GUI 都通过它下判, 避免两套逻辑打架。
+> 规则层口径已收敛到 `fitness_pkg/science.py` 单一来源, 引擎、GUI 与 22 周计划视图 (`plan_science.py`) 都按它下判, 避免两套逻辑打架。
 > GUI 相关改动无法在无显示器环境验证，建议在本地 Windows 打开界面确认一次（见 `cairn/ROADMAP.md` 开放问题）。
-> 缺 PySide6 / numpy / pandas 时相关用例自动跳过。
+> 缺 PySide6 / numpy / pandas 时相关用例自动跳过；`import fitness_pkg` 本身**不要求** PySide6，
+> 纯逻辑层（数据模型 / 解析器 / 规则层 / 计划科学视图）在 CI 与 CLI 里可直接用，
+> 降级状态见 `fitness_pkg.GUI_AVAILABLE` / `GUI_IMPORT_ERROR`。
 
 ## 📊 数据说明
 

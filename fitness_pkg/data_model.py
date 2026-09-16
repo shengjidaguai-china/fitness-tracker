@@ -133,11 +133,22 @@ class BodyDataModel:
 
     def predict_target_date(self, target: float, col: str = "体重(kg)") -> Optional[str]:
         """线性预测达标日"""
+        if col not in self.df.columns:
+            return None
         valid = self.df[self.df[col].notna()].copy()
         if len(valid) < 5:
             return None
         valid["days"] = (pd.to_datetime(valid["日期"]) - pd.to_datetime(valid["日期"].iloc[0])).dt.days
-        z = np.polyfit(valid["days"].values, valid[col].values, 1)
+        # 显式转 float: 新格式 CSV 里数值列可能是 object dtype, np.polyfit 会直接报
+        # "Cannot cast ufunc 'lstsq' input 1 from dtype('O') to dtype('float64')"
+        try:
+            x = valid["days"].astype(float).to_numpy()
+            y = pd.to_numeric(valid[col], errors="coerce").astype(float).to_numpy()
+        except (TypeError, ValueError):
+            return None
+        if len(x) < 5 or np.isnan(x).any() or np.isnan(y).any():
+            return None
+        z = np.polyfit(x, y, 1)
         if abs(z[0]) < 1e-6:
             return None
         pred_days = (target - z[1]) / z[0]

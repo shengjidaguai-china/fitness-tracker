@@ -4,13 +4,14 @@
 > 若此文件不存在，NPC 会回退读取 README.md 与仓库 Issues。
 
 ## 最新状态同步
+- 2026-09-16 (第三轮, Issue #1): 新增 `fitness_pkg/plan_science.py` —— 把规则层接到 22 周计划视图 (F9)。原来的组次解析只在 GUI 详情弹窗里有, 现在有了可测试的纯逻辑层: `parse_group_spec` / `muscle_bucket_of` / `estimate_weekly_sets` / `weekly_volume_status` / `week_display_meta` / `deload_guidance`。**只按 Helms 的「组/周/肌群」下结论**: 周计划正文写的是「单次训练该动作做几组」, 不是周组数, 所以解析到几个训练日就除以几, 休息周直接返回「不判定」而不是误报「练得太少」。同时修掉阻塞验证的三个工程问题: `import fitness_pkg` 不再强依赖 PySide6 (缺依赖时降级并在 `GUI_AVAILABLE`/`GUI_IMPORT_ERROR` 里给原因)、`unittest discover` 不再对 UI 用例报假失败、`data_model.predict_target_date` 的 numpy object dtype 崩溃。护栏: 测试 141→152 项全通过 (含 39 项新用例), `ruff check` 与 `ruff format --check` 全绿, 冒烟 4 组通过; 补测试后计数说明改为「测试用例数由采集结果给出, 不再写死数字」, 防止文档再次漂移。
 - 2026-09-16: 规则层「科学化」第二轮（Issue #1，PR #3）。新增 `tests/`（冒烟 + 引擎/规则层/数据层用例）；修正 e1RM 余力口径；补周期/频率/周组数自检、逐组 RPE 路径、热身与检查点、节律减载周、RPE 触发的减载信号、危险信号暂停、48 小时接回首步、5/2 分钟短版；持久化改为原子写 + 编码探测 + 损坏备份；收敛 3 个 PyInstaller spec 为「主 + 调试」两套；README 结构与实际代码对齐（移除失效 Star History、修正文件名/结构描述）。
 - 2026-09-16: PR #2（F5 训练科学规则层）已合并入 master（`fitness_pkg/science.py` + 引擎/GUI 接入）。
 - 2026-09-03: 初始化 CNB 双轨配置（.cnb.yml + .cnb/settings.yml 照搬量化系统 28-终极量化交易系统8.4 的双轨模式，prompt 改写为健身监控上下文）。仓库当前为 v9.0，主程序 `体脂体重监控_完整版.py`，核心模块 `fitness_pkg/` + `ai_coach_engine.py`。目标 CNB 仓 `yuppiez328/fitness-tracker`（CNB 账号与 GitHub 源 yuppiez99999 不同名，沿用双轨惯例；GitHub 源为 yuppiez99999/fitness-tracker）。
 
 ## 当前焦点
-- 稳定化与测试: `fitness_pkg/science.py` 与 `ai_coach_engine.py` 的口径已统一并有 pytest 用例覆盖；下一步为 `parsers.py` / `data_model.py` 补更完整用例（现有 `tests/test_fitness_pkg.py` 为骨架）
-- AI 教练增强: 规则层已接入周期/复盘/接回/短版；下一步接入 22 周训练计划页与报告输出
+- 稳定化与测试: `fitness_pkg/science.py` / `plan_science.py` 与 `ai_coach_engine.py` 的口径已统一并有用例覆盖；`parsers.py` / `data_model.py` 用例已补齐（含 GBK 回退、原子写、缓存不污染、未知列容错）。下一步：把 `generate_report.py` 纳入测试（F3）
+- AI 教练增强: 规则层已接入周期/复盘/接回/短版 + 22 周计划视图；下一步把科学化视图接到 GUI 训练计划页与报告输出
 - 打包优化: PyInstaller spec 已收敛为「主 + 调试」两套，下一步做体积优化
 
 ## 待办 / 排期项（建议编号 Fx.x）
@@ -20,9 +21,10 @@
 - ~~F4: 引入 ruff 基础门禁~~ → 已完成（master 已接入 ruff + pre-commit + pytest）
 - ~~F5: 训练科学规则层~~ → 已完成并合并（PR #2，`fitness_pkg/science.py`）
 - ~~F6: 规则层接入周期/复盘/接回/短版~~ → 已完成（PR #2 引擎接入 + PR #3 口径统一）
-- F7: 为 `fitness_pkg/parsers.py` / `data_model.py` 补更完整的单元测试
-- F8: GUI 冒烟验证脚本化（无显示器环境下用 QTest 或离屏平台跑通 6 个页面的构造）
-- F9: AI 教练规则层接入 22 周训练计划页（把 RPE 路径/减载周写进周计划展示）
+- ~~F7: 为 `fitness_pkg/parsers.py` / `data_model.py` 补更完整的单元测试~~ → 已完成（`tests/test_parsers.py` / `test_data_model.py` 补齐并在 CI 可跑，顺带修掉包导入强依赖 PySide6 与 numpy dtype 崩溃）
+- F8: GUI 冒烟验证脚本化（无显示器环境下用 QTest 或离屏平台跑通 6 个页面的构造；现有 `tests/test_ui_construct.py` 已覆盖构造，但云端缺 PySide6 仍跳过）
+- ~~F9: AI 教练规则层接入 22 周训练计划页~~ → 规则层侧已完成（`fitness_pkg/plan_science.py` + 39 项用例）；剩余：把 `plan_science` 的文案接到 GUI 训练计划页展示
+- F10: `generate_report.py` 的健壮性与本地数据隔离校验纳入测试（原 F3 的具体化）
 
 ## 开放问题
 - 是否引入 ruff/mypy 作为门禁（当前仅有 py_compile 基础校验）

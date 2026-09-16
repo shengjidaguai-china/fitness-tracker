@@ -4,10 +4,16 @@
 不进入事件循环(不 exec), 仅构造后即释放。
 """
 
+# 注意: 这里用 try/ImportError 而不是 pytest.importorskip —— `python -m unittest discover`
+# 会把 importorskip 抛出的 Skipped 当成本模块导入失败 (ERROR), 从而报假失败。
+import unittest
+
+try:
+    import PySide6  # noqa: F401
+except ImportError as _exc:  # 无 GUI 环境 (CI / 无显示器)
+    raise unittest.SkipTest(f"缺少 GUI 依赖: {_exc}") from _exc
+
 import pytest
-
-pytest.importorskip("PySide6")
-
 from PySide6.QtWidgets import QApplication
 
 
