@@ -44,7 +44,7 @@
 | 🏋️ **动作示范库** | 51 个动作 GIF 动画 · 中文步骤教学 · 肌群信息 |
 | 📅 **训练计划** | 22 周宽背窄腰塑形 v2.1（三阶段周期化，6 练 1 休）· 点击动作看示范 |
 | 🍽 **饮食与补剂** | 三阶段营养方案 · 五餐明细 · 补剂表 · 饮水指南 |
-| 🤖 **AI 教练** | 基于 Lzheng-fitness 知识库的增肌规划系统（5 个子功能）· 训练科学规则层 |
+| 🤖 **AI 教练** | 基于 Lzheng-fitness 知识库的增肌规划系统（5 个子功能 · 规则层带单元测试） |
 
 ---
 
@@ -101,13 +101,13 @@
 |:------|:-----|
 | 📋 建档与分层 | P0-L3 四级训练阶段评估（启动/动作稳定/周管理/阶段进步）+ 周组数区间校验 |
 | 📅 力量周期 | 8-12 周动态周期生成（积累→强度→实现→减量），含热身流程、顶组+回退组、逐组 RPE 路径 |
-| 📝 训练复盘 | 单次训练复盘 + 渐进超负荷决策 + 反应式减载清单 + 停滞检测 |
+| 📝 训练复盘 | 单次训练复盘 + 渐进超负荷决策（双重渐进：先加次再加重）+ 反应式减载清单 + 停滞检测 |
 | ↩️ 停训接回 | 三档接回方案（正常/降级/最低）+ 48 小时接回动作 + 升级/维持/暂停条件 |
 | ⏱ 短版训练 | 30/20/10/5/2 分钟最低执行版本 + 动作模式缺口审计 |
 
 ### 训练科学规则层 `fitness_pkg/science.py`
 
-把 Lzheng-fitness 知识库里的判断规则收敛为**可配置、可测试**的参数（`tests/test_science.py` 49 项用例 + `tests/smoke_check.py` 冒烟）。
+把 Lzheng-fitness 知识库里的判断规则收敛为**可配置、可测试**的参数（标准库 unittest 覆盖 `tests/test_ai_coach_engine.py` / `test_fitness_pkg.py` + `tests/smoke_check.py` 冒烟）。
 
 | 规则 | 口径 | 来源 |
 |:-----|:-----|:-----|
@@ -117,10 +117,14 @@
 | 力竭使用 | 多数组保留 1–2 RIR；复合主项常规不做力竭，孤立动作仅**末组**可接近 | Schoenfeld 第 4 章 |
 | 渐进方式 | 复合动作用线性/波浪周期，孤立动作优先双重渐进（先加次再加最小重量档） | Helms Level 3 pp.99-125 |
 | 自动调节 | 按 e1RM 与目标 RPE 校正当日负荷；一次只动一个主要变量 | Nuckols 自动调节/APRE |
-| 反应式减载 | 命中 2 项及以上（不想训练/睡眠差/表现下降/压力大/疼痛加重）→ 减载一周；连续 3 个中周期未减载 → 预防性减载 | Helms pp.121-125 |
+| e1RM 口径 | 先按 RIR 折算到「当天力竭会用的重量」再套 Epley，与负荷换算互为逆运算；不再把当前次数当力竭次数 | Lzheng 03 |
+| 节律减载 | 约每 4 周一次，且减载周强度必须**低于任何实现周**；连续 3 个中周期未减载 → 预防性减载 | Helms pp.121-125 |
+| 反应式减载 | 命中 2 项及以上（不想训练/睡眠差/表现下降/压力大/疼痛加重）→ 减载一周 | Helms pp.121-125 |
 | 停滞判定 | 同重量掉次数或同组次 RPE 升约一级，**连续两次**才怀疑结构 | Lzheng 03/05 |
 | 安全分流 | 胸痛/晕厥/麻木/放射痛等危险信号直接暂停常规处方并建议专业评估 | Lzheng 01；ACSM/WHO 核验入口 |
 | 短版训练 | 保留当天主线、先减附件、不压缩复合主项休息；漏 1 次不补课、漏 2 次用短版接回 | Lzheng 04；Helms Level 5 |
+
+**口径提示**：全部负荷与 1RM 都是**估算起点**，真正准的是每次训练的 RPE 反馈，别用公式替代记录。
 
 ```mermaid
 flowchart LR
@@ -175,9 +179,15 @@ python 体脂体重监控_完整版.py
 
 ```bash
 pip install pyinstaller
-python -m PyInstaller 健身监控.spec --noconfirm --clean
+python build_exe.py          # 推荐: 一键打包（含图标 + 精简排除项）
+# 或使用 spec 文件:
+python -m PyInstaller 健身监控v9.0.spec --noconfirm --clean
 # 产物: dist\健身监控v9.0\健身监控v9.0.exe
 ```
+
+> 启动异常需要看报错时，改用 `健身监控_debug.spec`（保留控制台窗口，产物名 `健身监控v9.0_debug`）。
+
+---
 
 ### 🛠️ 代码质量工程化（集成自 GitHub 开源工具）
 
@@ -217,6 +227,7 @@ flowchart TB
     subgraph Core["⚙️ 核心模块"]
         B1[fitness_pkg<br>模型/页面/解析器]
         B2[ai_coach_engine<br>P0-L3/周期/复盘/接回/短版]
+        B3[tests<br>冒烟检查 + pytest 用例]
     end
     subgraph Data["💾 数据层"]
         C1[本地体测数据<br>12 项指标]
@@ -243,7 +254,6 @@ flowchart TB
 | 代码质量 | ruff · pre-commit · pytest（详见「代码质量工程化」） |
 | 数据源 | [exercises-dataset](https://github.com/yuppiez99999/exercises-dataset)（Git 子模块） |
 | 知识库 | [Lzheng-fitness](https://github.com/yuppiez99999/Lzheng-fitness)（Git 子模块） |
-| 舆情分析 | [BettaFish / MiroFish](https://github.com/yuppiez99999/MiroFish)（Git 子模块） |
 
 ---
 
@@ -319,19 +329,21 @@ python Lzheng-fitness/tools/install.py --platform codex --all
 ```
 06_个人辅助工具/
 ├── 体脂体重监控_完整版.py           # 主程序入口（PySide6 GUI，6 个 Tab）
-├── fitness_modules.py               # 核心模块（模型/页面/解析器/教程/AI教练页面）
-├── ai_coach_engine.py               # AI 教练引擎（P0-L3/周期/复盘/接回/短版）
+├── fitness_modules.py               # 兼容层：re-export fitness_pkg（旧调用方无需改动）
+├── fitness_pkg/                     # 核心包（模型/动作库/解析器/弹窗/页面/AI教练页）
 ├── fitness_pkg/science.py           # 训练科学规则层（RPE/RIR、周组数、减载、停滞、缺口审计）
-├── tests/test_science.py            # 科学规则层单元测试（标准库 unittest，零依赖）
-├── tests/smoke_check.py             # 冒烟检查（py_compile + 引擎端到端 + 数据隔离）
-├── 健身监控.spec                     # PyInstaller 打包配置
+├── ai_coach_engine.py               # AI 教练引擎（P0-L3/周期/复盘/接回/短版 + 规则层）
+├── tests/                           # smoke_check.py 冒烟 + pytest 用例（缺 GUI 依赖自动跳过）
+├── cairn/                           # ROADMAP 与开发日志（NPC 自动开发排期事实源）
+├── 健身监控v9.0.spec                 # PyInstaller 主打包配置（正式版）
+├── 健身监控_debug.spec               # 调试打包配置（带控制台，便于排查启动异常）
+├── build_exe.py                     # 命令行一键打包脚本
 ├── fitness_icon.ico                 # 应用图标
 ├── 启动体脂体重监控.bat             # Windows 一键启动脚本
 ├── Lzheng-fitness/                  # 知识库子模块（Schoenfeld/Helms 等 6 专家）
 ├── generate_report.py               # 报告生成工具
-├── 补充缺失数据.py                   # 体测数据补全脚本
+├── 补全数据.py                       # 体测数据补全脚本
 ├── .venv/                           # 虚拟环境（不提交）
-├── BettaFish/                       # 舆情分析子模块（Git 子模块）
 ├── exercises-dataset/               # 动作数据集子模块（Git 子模块）
 ├── dist/                            # 封装产物（仅 exe 本体随仓库分发）
 │   └── 健身监控v9.0/
@@ -349,7 +361,20 @@ python Lzheng-fitness/tools/install.py --platform codex --all
 
 </details>
 
----
+## 🧪 本地校验
+
+```bash
+# 冒烟: py_compile 全部核心模块 + 规则层断言 + 引擎端到端 + 4 项口径不变量
+python tests/smoke_check.py
+
+# 单元测试: RPE/RIR、e1RM 互逆、周组数、周期/减载、安全分流、复盘、接回、短版
+python -m pytest tests
+python -m unittest discover -s tests   # 与上同源, 不装 pytest 时可用
+```
+
+> 规则层口径已收敛到 `fitness_pkg/science.py` 单一来源, 引擎与 GUI 都通过它下判, 避免两套逻辑打架。
+> GUI 相关改动无法在无显示器环境验证，建议在本地 Windows 打开界面确认一次（见 `cairn/ROADMAP.md` 开放问题）。
+> 缺 PySide6 / numpy / pandas 时相关用例自动跳过。
 
 ## 📊 数据说明
 
@@ -459,7 +484,6 @@ PolyForm NC 1.0.0 中的"非商业"采用正向定义，**任何非商业目的�
 |:-------|:-------|:---------|:---------|
 | [`Lzheng-fitness/`](./Lzheng-fitness/) | MIT | 允许 | 保留版权声明 |
 | [`exercises-dataset/`](./exercises-dataset/) | 见子模块仓库 | 见子模块 LICENSE | 见子模块 LICENSE |
-| [`BettaFish/`](./BettaFish/) | 见子模块仓库 | 见子模块 LICENSE | 见子模块 LICENSE |
 
 **组合分发注意**：当主仓库代码与子模块代码一同分发时，主仓库部分受 PolyForm NC 约束（非商业 + 署名），子模块部分受各自原许可约束。若下游用途同时涉及两部分，须同时满足所有适用许可的最严格条款；任一子模块许可不放宽主仓库的非商业约束。
 
@@ -503,8 +527,6 @@ PolyForm NC 1.0.0 中的"非商业"采用正向定义，**任何非商业目的�
 <div align="center">
 
 **⭐ 如果这个项目对你有帮助，欢迎点一个 Star！**
-
-[![Star History Chart](https://api.star-history.com/svg?repos=shengjidaguai-china/fitness-tracker&type=Date)](https://star-history.com/#shengjidaguai-china/fitness-tracker&Date)
 
 <img src="https://img.shields.io/badge/Required%20Notice-Copyright%20%28c%29%202026%20yuppiez99999-blue?style=flat-square" alt="Required Notice">
 

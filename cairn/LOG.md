@@ -2,14 +2,18 @@
 
 > 最新在顶部。每条 ≤ 20 行，仅摘要 + 指针。
 
-## 2026-09-04 训练科学性升级 (F5)
-- 扫描 3 个 GitHub 关联仓库后，确认科学来源是 `Lzheng-fitness/knowledge/` 与六位专家模块；据此新增训练科学规则层并全链路接入。
-- 新增 `fitness_pkg/science.py`：RPE/RIR 换算、e1RM 互逆口径、P0–L3 周组数区间、自动调节、反应式减载清单、停滞/平台检测、组间休息、热身流程、多组 RPE 路径、力竭策略、节奏建议、动作缺口审计、安全分流。
-- `ai_coach_engine.py`：周期生成接入热身/休息/力竭/节奏并封顶减量强度；复盘改为科学层统一判定（含减载与停滞）；接回增加 48 小时动作与升级/维持/暂停条件；短版扩展到 5/2 分钟；导出 Markdown 增加「科学依据」「验证方式」。
-- `fitness_pkg/ai_coach.py`：建档加周组数校验、周期页加训练等级与执行口径、复盘页加目标次数与减载信号勾选、接回页支持多动作、短版页加缺口审计。
-- 新增 `tests/test_science.py`（49 项）+ `tests/smoke_check.py`（冒烟）；`python -m unittest discover -s tests` 与 `python tests/smoke_check.py` 均通过。
-- README 增补训练科学规则层说明表；ROADMAP 增补 F5 交付清单与 F6/F7 排期。
-- 边界：未改个人数据目录 / LICENSE / 子模块；未提交任何个人体测或训练数据。GUI 改动建议本地 Windows 冒烟。
+## 2026-09-16 规则层科学化第二轮 + 测试基建（Issue #1 追问「还有需要改进的地方吗」）
+- 修正 `estimate_1rm`：RPE 描述余力(RIR)，原实现把当前次数当力竭次数；改为统一走规则层 `e1rm_from_set` 口径，与负荷换算互为逆运算。
+- 规则层 `fitness_pkg/science.py` 保留为唯一来源；`ai_coach_engine.py` 不再重复实现同一套规则（避免两套口径打架）。
+- `rpe_to_rir` 表（10≈0、9≈1、8≈2、7≈3，半档取保守侧）、`weekly_set_range`/`check_weekly_sets`、`is_compound`/`rest_seconds`/`allows_failure`。
+- 周期生成：明示每周暴露次数、周组数区间说明、逐组 RPE 路径、热身流程、日目的与技术检查点、节律减载周（不变量：减载周必须轻于任何实现周）、5/2 分钟短版。
+- 复盘：疼痛/异常疲劳/动作失控输入；命中 2 项信号建议减载一周；危险信号（胸痛/晕厥/麻木/放射痛）直接暂停；单次异常不改结构，连续两次才怀疑周期。
+- 接回：漏 1 次不补课 / 漏 2 次 30 分钟版；48 小时首步 + 升级/维持/暂停条件；>56 天暂停并重新建档。
+- 持久化：`_read_json` 编码探测 + `.bad` 备份，`_atomic_write_json` 原子写；建档缺字段/多字段不再崩溃。
+- 打包：`.gitmodules` 移除不存在的 `BettaFish`；3 个 spec 收敛为「主 + 调试」两套；`build_exe.py` 补 `--icon`。
+- README：结构树/模块名/脚本名与实际对齐，AI 教练章补规则层说明与校验命令，移除失效 Star History 图表。
+- 验证：`python tests/smoke_check.py` 4 组通过；`python -m pytest tests` 通过（AI 引擎/规则层/数据层，UI 用例云端自动跳过）。GUI 未动布局，仍需本地 Windows 目视确认。
+- 冲突收口：master 先合并了 PR #2，又推进到 v10.x（ruff + pre-commit + pytest + 架构图）。本分支两次合并 master，冲突文件按「科学版口径 + 规则层实现」合并，并按 `pyproject.toml` 的 ruff 配置（target py38 / quote-style double）统一格式，`ruff check` 全绿。
 
 ## 2026-09-03 初始化 CNB 双轨 NPC 配置
 - 克隆 GitHub `yuppiez99999/fitness-tracker` 到本地 `e:/各种PY程序/fitness-tracker`，生成 `.cnb.yml` + `.cnb/settings.yml`（照搬量化系统 28-终极量化交易系统8.4 的双轨模式，prompt 改写为健身监控上下文）。

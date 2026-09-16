@@ -34,6 +34,7 @@ try:
         TrainingLog,
         assess_overall_level,
         build_weekly_volume_report,
+        determine_cycle_length,
         export_cycle_to_markdown,
         generate_return_plan,
         generate_short_plan,
@@ -193,6 +194,7 @@ class AICoachPage(QWidget):
 
         level = assess_overall_level(self.profile)
         html = f"<h3>整体训练等级: {level}</h3><p>{LEVEL_DESC[level]}</p>"
+        html += self._cycle_selfcheck_html()
         html += "<h4>建议:</h4><ul>"
         if level == "P0":
             html += "<li>首要目标: 安全、可重复、建立基准</li><li>使用固定器械或支撑动作</li><li>每次训练记录重量和感觉</li>"
@@ -235,6 +237,33 @@ class AICoachPage(QWidget):
         )
         self.lbl_level_result.setHtml(html)
 
+    # ─── 自检: 周期时长与周组数是否与「频率先匹配可执行时间」一致 ───
+    def _cycle_share(self) -> float:
+        """单动作每周平均训练次数(由每周训练日数推导, 至少 1)"""
+        return max(1.0, max(1, int(self.profile.weekly_sessions or 4)) / 2.0)
+
+    def _cycle_weeks(self) -> int:
+        """按约定频率推导建议周期长度"""
+        return determine_cycle_length(round(self._cycle_share()), self.profile.goal)
+
+    def _cycle_selfcheck_html(self) -> str:
+        """生成周期时长/周组数自检结论"""
+        try:
+            share = self._cycle_share()
+            weeks = self._cycle_weeks()
+        except Exception:
+            return ""
+        sessions = max(1, int(self.profile.weekly_sessions or 4))
+        sets_low, sets_high = 10 * sessions, 20 * sessions
+        html = "<h4>周期自检 (频率优先于目标)</h4><ul>"
+        html += (
+            f"<li>每周 {sessions} 练 → 起始周组数参考区间 "
+            f"<b>{sets_low}-{sets_high} 组</b>, 先用区间下限, 按恢复与完成率再加</li>"
+        )
+        html += f"<li>按此频率单动作约训 {share:.1f} 次/周 → 建议周期 <b>{weeks} 周</b> (暴露越频繁周期越短)</li>"
+        html += "<li>训练量是起点假设, 不机械追求最大组数</li></ul>"
+        return html
+
     # ─── 子页2: 力量周期生成 ───
     def _build_cycle_tab(self):
         w = QWidget()
@@ -271,6 +300,12 @@ class AICoachPage(QWidget):
         ctrl.addWidget(self.in_cycle_level)
         layout.addLayout(ctrl)
 
+        # 频率假设提示 (科学版) + 固定口径说明 (master) 并存
+        self.lbl_cycle_hint = QLabel()
+        self.lbl_cycle_hint.setWordWrap(True)
+        self.lbl_cycle_hint.setStyleSheet(f"color: {COLORS['subtext']}; padding: 2px 0 6px 0;")
+        layout.addWidget(self.lbl_cycle_hint)
+        self._refresh_cycle_hint()
         self.lbl_cycle_tip = QLabel(
             "周期长度按每周暴露次数与目标决定: 8 周 (目标单一/高频) · 10 周 (一般力量发展) · 12 周 (低频或需完整阶段)"
         )
@@ -287,6 +322,19 @@ class AICoachPage(QWidget):
         self.cycle_result.setReadOnly(True)
         layout.addWidget(self.cycle_result)
         return w
+
+    def _refresh_cycle_hint(self):
+        """提示本周期采用的频率假设, 避免默认值(每周2次)悄悄改变周期长度"""
+        try:
+            sessions = max(1, int(self.profile.weekly_sessions or 4))
+            sets_low, sets_high = 10 * sessions, 20 * sessions
+            self.lbl_cycle_hint.setText(
+                f"本周期按建档「每周 {sessions} 练」推导: 单动作约 {self._cycle_share():.1f} 次/周 "
+                f"→ 建议 {self._cycle_weeks()} 周; 起始周组数 {sets_low}-{sets_high} 组 (先用下限)。"
+                "若实际每周只练 1 次, 请把建档的「每周训练次数」调低后重新生成。"
+            )
+        except Exception:
+            self.lbl_cycle_hint.setText("")
 
     def _gen_cycle(self):
         move = self.in_cycle_move.currentText()
@@ -335,10 +383,13 @@ class AICoachPage(QWidget):
             back = d.sets[1] if len(d.sets) > 1 else None
             top_s = f"{top.weight}kg {top.sets}×{top.reps}" if top else "—"
             back_s = f"{back.weight}kg {back.sets}×{back.reps}" if back else "—"
-            path_s = top.rpe_text if top else "—"
+            path_s = "—"
+            if top is not None:
+                path_s = getattr(top, "rpe_text", None) or f"{top.rpe_start}→{top.rpe_end}"
             html += f"<tr><td>{d.week}</td><td>{d.phase}</td><td>{top_s}</td><td>{back_s}</td><td>{path_s}</td></tr>"
         html += "</table>"
         html += f'<p style="color:{COLORS["success"]};">✓ 已保存至: {md_path}</p>'
+        html += self._cycle_selfcheck_html()
         html += (
             '<p style="color:' + COLORS["subtext"] + ';">验证方式: 成功不等于最终 1RM, '
             "还要看目标负荷下的动作质量、RPE、完成率与恢复</p>"
@@ -382,22 +433,35 @@ class AICoachPage(QWidget):
         ctrl.addWidget(self.in_rev_target)
         layout.addLayout(ctrl)
 
-        # v9.1: 反应式减载清单 (Helms: 0–1 项前进, 2+ 项减载一周)
-        signals = QHBoxLayout()
+        # 体感与状态 + 反应式减载清单: 命中 2 项信号即建议减载一周
+        flags = QHBoxLayout()
+        self.chk_completed = QCheckBox("完成计划组次")
+        self.chk_completed.setChecked(True)
+        self.chk_fatigue = QCheckBox("异常疲劳/恢复差")
+        self.chk_form = QCheckBox("动作失控")
         self.chk_reluctance = QCheckBox("不想训练")
         self.chk_sleep = QCheckBox("睡眠变差")
         self.chk_drop = QCheckBox("负荷/次数下降")
         self.chk_stress = QCheckBox("生活压力大")
-        self.chk_pain = QCheckBox("疼痛加重")
-        for chk in (self.chk_reluctance, self.chk_sleep, self.chk_drop, self.chk_stress, self.chk_pain):
-            signals.addWidget(chk)
-        layout.addLayout(signals)
+        self.chk_pain = QCheckBox("疼痛")
+        for chk in (
+            self.chk_completed,
+            self.chk_reluctance,
+            self.chk_sleep,
+            self.chk_drop,
+            self.chk_stress,
+            self.chk_fatigue,
+            self.chk_pain,
+            self.chk_form,
+        ):
+            flags.addWidget(chk)
+        layout.addLayout(flags)
 
         pain_row = QHBoxLayout()
-        pain_row.addWidget(QLabel("本次备注 / 疼痛描述:"))
-        self.in_rev_note = QLineEdit()
-        self.in_rev_note.setPlaceholderText("如: 训练中胸部不适 / 动作稳定, 无疼痛")
-        pain_row.addWidget(self.in_rev_note)
+        pain_row.addWidget(QLabel("疼痛位置/本次备注:"))
+        self.in_pain_desc = QLineEdit()
+        self.in_pain_desc.setPlaceholderText("如: 左肩前侧推起时刺痛 / 训练中胸部不适 / 动作稳定无疼痛")
+        pain_row.addWidget(self.in_pain_desc)
         layout.addLayout(pain_row)
 
         btn = QPushButton("📝 复盘并生成下一次处方")
@@ -425,7 +489,9 @@ class AICoachPage(QWidget):
         }
 
     def _do_review(self):
-        note = self.in_rev_note.text().strip()
+        if not AI_COACH_AVAILABLE:
+            return
+        note = self.in_pain_desc.text().strip()
         log = TrainingLog(
             date=datetime.datetime.now().strftime("%Y-%m-%d"),
             movement=self.in_rev_move.text(),
@@ -433,12 +499,27 @@ class AICoachPage(QWidget):
             reps=self.in_rev_reps.value(),
             sets=self.in_rev_sets.value(),
             rpe=self.in_rev_rpe.value(),
+            completed=self.chk_completed.isChecked(),
             notes=note,
         )
+        reviews = load_reviews()
+        prev = None
+        for r in reversed(reviews):
+            d = r.get("log") or {}
+            if d.get("movement") == log.movement:
+                try:
+                    prev = TrainingLog(**{k: v for k, v in d.items() if k in TrainingLog.__dataclass_fields__})
+                    break
+                except Exception:
+                    continue
+
+        # 判断口径统一由规则层给出, 不在 GUI 里维护第二套逻辑
         level = assess_overall_level(self.profile)
+        detail = None
         try:
             detail = review_report(
                 log,
+                prev_log=prev,
                 level=level,
                 target_reps=self.in_rev_target.value(),
                 target_rpe=8.0,
@@ -450,6 +531,7 @@ class AICoachPage(QWidget):
 
         result = review_training(
             log,
+            prev_log=prev,
             level=level,
             target_reps=self.in_rev_target.value(),
             target_rpe=8.0,
@@ -467,16 +549,34 @@ class AICoachPage(QWidget):
             "减载一周": COLORS["accent"],
             "预防性减载": COLORS["accent"],
             "暂停常规处方": COLORS["danger"],
+            "暂停训练": COLORS["danger"],
         }.get(result.judgment, COLORS["text"])
         html = f'<h3 style="color:{color};">判断: {result.judgment}</h3>'
+        if result.safety_hold:
+            html += (
+                f'<p style="color:{COLORS["danger"]};"><b>⚠ 危险信号: 暂停常规训练处方, '
+                "先获得合适的专业评估。本工具不作诊断。</b></p>"
+            )
+        if result.deload_recommended and not result.safety_hold:
+            html += (
+                f'<p style="color:{COLORS["warning"]};"><b>⚖ 建议减载一周</b> — '
+                f"命中信号: {'、'.join(result.deload_reasons)}</p>"
+            )
         html += "<h4>关键发现</h4><ul>"
         for f in result.key_findings:
             html += f"<li>{f}</li>"
         html += "</ul>"
 
         rx = result.next_prescription
-        html += f"<h4>下一次处方</h4><p><b>{rx.get('movement', '')}</b>: {rx.get('weight', '')}kg × "
-        html += f"{rx.get('sets', rx.get('movement_sets', ''))}组 × {rx.get('reps', '')}次</p>"
+        rx = result.next_prescription
+        if "weight" in rx:
+            html += (
+                f"<h4>下一次处方</h4><p><b>{rx.get('movement', '')}</b>: "
+                f"{rx.get('weight', '')}kg × {rx.get('sets', rx.get('movement_sets', ''))}组 × "
+                f"{rx.get('reps', '')}次</p>"
+            )
+        else:
+            html += f"<h4>下一步</h4><p><b>{rx.get('action', '暂停')}</b> — {rx.get('note', '')}</p>"
         if rx.get("rpe_text"):
             html += "<p>逐组 RPE: " + " → ".join(rx["rpe_text"]) + "</p>"
         elif rx.get("rpe"):
@@ -484,6 +584,8 @@ class AICoachPage(QWidget):
         if rx.get("rest"):
             lo, hi = rx["rest"]
             html += f"<p>组间休息: {lo // 60}–{hi // 60} 分钟</p>"
+        elif rx.get("rest_seconds"):
+            html += f"<p>组间休息: ≥{int(rx['rest_seconds']) // 60} 分钟</p>"
         if rx.get("failure"):
             html += f"<p>力竭使用: {rx['failure']['note']}</p>"
         if rx.get("tempo"):
@@ -509,8 +611,12 @@ class AICoachPage(QWidget):
                 )
 
         html += (
-            '<p style="color:' + COLORS["subtext"] + ';">一次训练只改变重量/次数/组数中的一个主要变量; '
-            "单次状态差不等于平台期</p>"
+            f'<p style="color:{COLORS["subtext"]};">可比记录: '
+            + ("已找到上一次同动作记录" if prev else "暂无同动作历史, 先按基准模式建立第二个可比样本")
+            + "; 一次训练只改变重量/次数/组数中的一个主要变量</p>"
+        )
+        html += (
+            '<p style="color:' + COLORS["subtext"] + ';">单次状态差不等于平台期: 连续两次可比记录异常才怀疑周期结构</p>'
         )
         self.review_result.setHtml(html)
 
@@ -520,12 +626,19 @@ class AICoachPage(QWidget):
             self.review_result.setHtml("<p>暂无历史复盘记录</p>")
             return
         html = '<h3>历史复盘</h3><table border="1" cellpadding="4" style="border-collapse:collapse;">'
-        html += "<tr><th>时间</th><th>动作</th><th>重量</th><th>组×次</th><th>RPE</th><th>判断</th><th>渐进</th></tr>"
+        html += "<tr><th>时间</th><th>动作</th><th>重量</th><th>组×次</th><th>RPE</th><th>判断</th><th>渐进</th><th>减载信号</th></tr>"
         for r in reviews[-20:]:
-            log = r["log"]
-            html += f"<tr><td>{r['timestamp']}</td><td>{log['movement']}</td><td>{log['weight']}kg</td>"
-            html += f"<td>{log['sets']}×{log['reps']}</td><td>{log['rpe']}</td>"
-            html += f"<td>{r['judgment']}</td><td>{r['progression_type']}</td></tr>"
+            rec = r.get("log") or {}
+            reasons = r.get("deload_reasons") or []
+            mark = f"⚖ {len(reasons)} 项" if r.get("deload_recommended") else "—"
+            if reasons:
+                mark += f" ({'、'.join(reasons)})"
+            html += (
+                f"<tr><td>{r.get('timestamp', '')}</td>"
+                f"<td>{rec.get('movement', '')}</td><td>{rec.get('weight', '')}kg</td>"
+            )
+            html += f"<td>{rec.get('sets', '')}×{rec.get('reps', '')}</td><td>{rec.get('rpe', '')}</td>"
+            html += f"<td>{r.get('judgment', '')}</td><td>{r.get('progression_type', '')}</td><td>{mark}</td></tr>"
         html += "</table>"
         self.review_result.setHtml(html)
 
@@ -548,6 +661,11 @@ class AICoachPage(QWidget):
         ctrl.addWidget(QLabel("动作:"))
         self.in_ret_move = QLineEdit("卧推")
         ctrl.addWidget(self.in_ret_move)
+        ctrl.addWidget(QLabel("连续漏练次数:"))
+        self.in_missed = QSpinBox()
+        self.in_missed.setRange(0, 10)
+        self.in_missed.setValue(0)
+        ctrl.addWidget(self.in_missed)
         ctrl.addWidget(QLabel("辅项(逗号分隔):"))
         self.in_ret_support = QLineEdit("划船, 深蹲")
         ctrl.addWidget(self.in_ret_support)
@@ -574,8 +692,8 @@ class AICoachPage(QWidget):
             self.in_days_off.value(),
             self.in_last_w.value(),
             self.in_ret_move.text(),
-            support,
-            self.in_ret_exposures.value(),
+            support_movements=support,
+            weekly_exposures=self.in_ret_exposures.value(),
         )
         perm_color = {
             "正常接回": COLORS["success"],
@@ -591,19 +709,26 @@ class AICoachPage(QWidget):
         html += f"<li><b>最低版</b>: {plan.minimal_version}</li>"
         html += "</ul>"
         if getattr(plan, "return_48h", ""):
-            html += f"<h4>48 小时内先完成</h4><p>{plan.return_48h}</p>"
+            html += f"<h4>48 小时内先完成</h4><p><b>{plan.return_48h}</b></p>"
+        if getattr(plan, "first_week_focus", None):
+            html += "<h4>第一周只验证这些</h4><ul>"
+            for f in plan.first_week_focus:
+                html += f"<li>{f}</li>"
+            html += "</ul>"
         if getattr(plan, "exit_conditions", None):
             html += "<h4>升级 / 维持 / 暂停条件</h4><ul>"
-            for k, label in (("upgrade", "升级"), ("hold", "维持"), ("stop", "暂停")):
-                if plan.exit_conditions.get(k):
-                    html += f"<li><b>{label}</b>: {plan.exit_conditions[k]}</li>"
+            for key, label in (("upgrade", "✅ 升级"), ("hold", "➖ 维持"), ("stop", "⛔ 暂停或继续降级")):
+                if plan.exit_conditions.get(key):
+                    html += f"<li><b>{label}</b>: {plan.exit_conditions[key]}</li>"
             html += "</ul>"
+        if getattr(plan, "no_makeup_note", ""):
+            html += f'<p style="color:{COLORS["warning"]};">{plan.no_makeup_note}</p>'
+        if getattr(plan, "success_criteria", ""):
+            html += '<p style="color:' + COLORS["subtext"] + ';">接回成功标准: ' + plan.success_criteria + "</p>"
         html += "<h4>未来7天</h4><ol>"
         for d in plan.next_7_days:
             html += f"<li>{d}</li>"
         html += "</ol>"
-        if getattr(plan, "no_makeup_note", ""):
-            html += f'<p style="color:{COLORS["warning"]};">{plan.no_makeup_note}</p>'
         html += (
             '<p style="color:' + COLORS["subtext"] + ';">接回成功的标准是恢复自主判断与稳定执行, '
             "而不是一周内回到停训前全部重量</p>"
@@ -616,8 +741,8 @@ class AICoachPage(QWidget):
         layout = QVBoxLayout(w)
 
         intro = QLabel(
-            "时间不足时自动生成短版训练，保留主线动作，不补课、不加倍训练、不用惩罚性有氧。"
-            "时间很紧时先减少低优先级附件，不压缩复合主项的组间休息。"
+            "时间不足时自动生成短版训练 (30/20/10/5/2 分钟), 保留主线动作, 不补课、不加倍训练、"
+            "不用惩罚性有氧。时间很紧时先减少低优先级附件, 不压缩复合主项的组间休息。"
         )
         intro.setWordWrap(True)
         intro.setStyleSheet(f"color: {COLORS['subtext']}; padding: 8px;")
@@ -653,7 +778,8 @@ class AICoachPage(QWidget):
             return
         move = self.in_cycle_move.currentText() if hasattr(self, "in_cycle_move") else "主项"
         cur = self.in_cur_1rm.value() if hasattr(self, "in_cur_1rm") else 60
-        cycle = generate_strength_cycle(move, cur, cur * 1.1, 2)
+        # 短版重量沿用建档频率推导的周期, 避免重量与频率口径脱节
+        cycle = generate_strength_cycle(move, cur, cur * 1.1, round(self._cycle_share()))
         if not cycle.days:
             self.short_result.setHtml("<p>无可用训练日</p>")
             return

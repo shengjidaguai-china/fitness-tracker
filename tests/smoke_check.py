@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 冒烟脚本 (v9.1) — 无需 GUI / 个人数据即可验证核心链路。
 
@@ -15,7 +14,6 @@
 退出码 0 = 全部通过; 非 0 = 有失败项。
 """
 
-import copy
 import os
 import py_compile
 import sys
@@ -40,6 +38,7 @@ MODULES = [
     'fitness_pkg/ui_pages.py',
     'fitness_pkg/ai_coach.py',
     'fitness_pkg/science.py',
+    '体脂体重监控_完整版.py',
 ]
 
 # 冒烟只允许在这些目录下产生文件 (均为 .gitignore 排除的个人数据目录)
