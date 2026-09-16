@@ -2,31 +2,34 @@
 
 <img src="fitness_icon.ico" alt="健身监控 Logo" width="120">
 
-# 健身监控 v9.0
+# 健身监控 v9.1
 
 **个人体脂体重监控 + 健身计划 + AI 教练**
 
 *基于 Keep / Fitbod / Hevy / Strong 特性优化，深度集成 [Lzheng-fitness](https://github.com/yuppiez99999/Lzheng-fitness) 训练知识库*
 
-[![Version](https://img.shields.io/badge/version-v9.0-ff6b35?style=flat-square&logo=github)](https://github.com/yuppiez99999/fitness-tracker/releases)
+[![Version](https://img.shields.io/badge/version-v9.1-ff6b35?style=flat-square&logo=github)](https://github.com/shengjidaguai-china/fitness-tracker/releases)
+[![Tests](https://img.shields.io/badge/tests-112%20passed-3FB950?style=flat-square&logo=pytest&logoColor=white)](tests/)
+[![Code Style](https://img.shields.io/badge/code%20style-ruff-261230?style=flat-square&logo=ruff&logoColor=white)](https://github.com/astral-sh/ruff)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
-[![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?style=flat-square&logo=windows)](#-快速开始)
+[![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white)](#-快速开始)
 [![GUI](https://img.shields.io/badge/GUI-PySide6-41CD52?style=flat-square&logo=qt&logoColor=white)](https://doc.qt.io/qtforpython/)
+
 [![License](https://img.shields.io/badge/License-PolyForm%20NC%201.0.0-blue?style=flat-square)](#-许可证)
 [![Use](https://img.shields.io/badge/用途-非商业%20·%20须署名-red?style=flat-square)](#-许可证)
-[![Stars](https://img.shields.io/github/stars/yuppiez99999/fitness-tracker?style=flat-square&logo=github)](https://github.com/yuppiez99999/fitness-tracker/stargazers)
-[![Issues](https://img.shields.io/github/issues/yuppiez99999/fitness-tracker?style=flat-square&logo=github)](https://github.com/yuppiez99999/fitness-tracker/issues)
+[![Stars](https://img.shields.io/github/stars/shengjidaguai-china/fitness-tracker?style=flat-square&logo=github)](https://github.com/shengjidaguai-china/fitness-tracker/stargazers)
+[![Issues](https://img.shields.io/github/issues/shengjidaguai-china/fitness-tracker?style=flat-square&logo=github)](https://github.com/shengjidaguai-china/fitness-tracker/issues)
 
-**[功能亮点](#-功能亮点) · [界面预览](#-界面预览) · [AI 教练](#-ai-教练-v90-新增) · [快速开始](#-快速开始) · [架构](#-技术架构) · [知识库](#-lzheng-fitness-知识库) · [许可证](#-许可证)**
+**[功能亮点](#-功能亮点) · [界面预览](#-界面预览) · [AI 教练](#-ai-教练-v90-新增--v91-科学规则层) · [快速开始](#-快速开始) · [架构](#-技术架构) · [知识库](#-lzheng-fitness-知识库) · [许可证](#-许可证)**
 
 ---
 
 </div>
 
-> ### v9.0 关键升级
-> 深度集成 Lzheng-fitness 知识库（Schoenfeld / Helms / Aragon / Nuckols 蒸馏模块），新增 **AI 教练**页面：
+> ### v9.1 关键升级
+> 深度集成 Lzheng-fitness 知识库（Schoenfeld / Helms / Aragon / Nuckols 蒸馏模块），**AI 教练**引入全新**训练科学规则层**（`fitness_pkg/science.py`，49 项规则用例）：
 >
-> **P0-L3 分层评估** · **8-12 周动态力量周期化** · **训练复盘 + 渐进超负荷** · **停训接回三档方案** · **最低执行版本（30/20/10 分钟）**
+> **RPE/RIR 统一口径** · **周组数 10–20 区间校验** · **反应式减载清单** · **停滞判定** · **48 小时接回** · **30/20/10/5/2 分钟短版**
 >
 > 支持 PyInstaller 一键封装为独立 .exe，免安装 Python 直接运行。
 
@@ -141,7 +144,7 @@ flowchart LR
 
 直接下载已封装的独立程序，无需安装 Python：
 
-1. 前往 [Releases](https://github.com/yuppiez99999/fitness-tracker/releases) 或克隆仓库获取 `dist\健身监控v9.0\` 目录
+1. 前往 [Releases](https://github.com/shengjidaguai-china/fitness-tracker/releases) 或克隆仓库获取 `dist\健身监控v9.0\` 目录
 2. 复制到任意 Windows 电脑
 3. 双击 `健身监控v9.0.exe` 即可运行
 
@@ -152,7 +155,7 @@ flowchart LR
 
 ```bash
 # 克隆仓库（含子模块）
-git clone --recurse-submodules https://github.com/yuppiez99999/fitness-tracker.git
+git clone --recurse-submodules https://github.com/shengjidaguai-china/fitness-tracker.git
 cd fitness-tracker
 
 # 创建虚拟环境
@@ -423,7 +426,7 @@ Required Notice: Copyright (c) 2026 yuppiez99999 (https://github.com/yuppiez9999
 | 移除、隐藏或篡改署名行 `Required Notice` | ❌ | 违反 Notices 条款，许可证立即终止 |
 | 重新许可（sublicense）或转让本许可证 | ❌ | PolyForm NC 明确禁止 |
 
-> **商业授权**：如需将本软件用于商业用途，请通过 [GitHub Issues](https://github.com/yuppiez99999/fitness-tracker/issues) 联系作者另行签订商业许可协议。
+> **商业授权**：如需将本软件用于商业用途，请通过 [GitHub Issues](https://github.com/shengjidaguai-china/fitness-tracker/issues) 联系作者另行签订商业许可协议。
 
 ### 署名要求（必须）
 
@@ -484,7 +487,7 @@ PolyForm NC 1.0.0 中的"非商业"采用正向定义，**任何非商业目的�
   author       = {yuppiez99999},
   title        = {健身监控 v9.0：个人体脂体重监控与 AI 教练},
   year         = {2026},
-  url          = {https://github.com/yuppiez99999/fitness-tracker},
+  url          = {https://github.com/shengjidaguai-china/fitness-tracker},
   license      = {PolyForm Noncommercial 1.0.0}
 }
 ```
@@ -501,7 +504,7 @@ PolyForm NC 1.0.0 中的"非商业"采用正向定义，**任何非商业目的�
 
 **⭐ 如果这个项目对你有帮助，欢迎点一个 Star！**
 
-[![Star History Chart](https://api.star-history.com/svg?repos=yuppiez99999/fitness-tracker&type=Date)](https://star-history.com/#yuppiez99999/fitness-tracker&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=shengjidaguai-china/fitness-tracker&type=Date)](https://star-history.com/#shengjidaguai-china/fitness-tracker&Date)
 
 <img src="https://img.shields.io/badge/Required%20Notice-Copyright%20%28c%29%202026%20yuppiez99999-blue?style=flat-square" alt="Required Notice">
 
