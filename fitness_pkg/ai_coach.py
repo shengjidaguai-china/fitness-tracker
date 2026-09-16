@@ -11,7 +11,7 @@ from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QSpinBox,
     QDoubleSpinBox, QComboBox, QPushButton, QTextEdit, QTabWidget,
-    QScrollArea, QFormLayout, QFrame,
+    QScrollArea, QFormLayout, QFrame, QCheckBox,
 )
 
 from .constants import COLORS
@@ -21,13 +21,24 @@ try:
     from ai_coach_engine import (
         AthleteProfile, assess_overall_level, LEVEL_DESC,
         generate_strength_cycle, export_cycle_to_markdown,
-        TrainingLog, review_training, save_review, load_reviews,
+        TrainingLog, review_training, review_report, coach_diagnostics,
+        build_weekly_volume_report, generate_short_plan,
+        save_review, load_reviews,
         generate_return_plan, generate_short_version,
         save_profile, load_profile, save_cycle,
     )
     AI_COACH_AVAILABLE = True
 except Exception:
     AI_COACH_AVAILABLE = False
+
+# 训练科学规则层 (v9.1) — 软依赖, 缺失时页面仍可运行但缺少自动化提示
+try:
+    from ai_coach_engine import evaluate_deload_signals, audit_movement_gaps
+    SCIENCE_UI_AVAILABLE = True
+except Exception:
+    evaluate_deload_signals = None
+    audit_movement_gaps = None
+    SCIENCE_UI_AVAILABLE = False
 
 
 class AICoachPage(QWidget):
@@ -97,6 +108,20 @@ class AICoachPage(QWidget):
         form.addRow('单次时长(分钟)', self.in_minutes)
         form.addRow('主要目标', self.in_goal)
 
+        # v9.1: 训练量按等级自动给出起始区间 (Helms: 每肌群/动作模式每周 10–20 组起始区间)
+        self.in_weekly_sets = QSpinBox()
+        self.in_weekly_sets.setRange(0, 40)
+        self.in_weekly_sets.setValue(12)
+        self.in_weekly_sets.setToolTip('当前每个肌群的每周总组数, 用于区间校验')
+        form.addRow('每肌群周组数', self.in_weekly_sets)
+
+        hint = QLabel('科学依据: Helms 训练金字塔 (周组数 10–20 起始区间 / 组间休息下限) · '
+                      'Schoenfeld (多数组保留 1–2 RIR, 力竭只在末组) · '
+                      'Nuckols (训练量是可检验剂量, 用表现而非公式定负荷)')
+        hint.setWordWrap(True)
+        hint.setStyleSheet(f"color: {COLORS['subtext']}; padding: 4px;")
+        form.addRow(hint)
+
         btn_save = QPushButton('💾 保存建档并评估分层')
         btn_save.setStyleSheet(f"background-color: {COLORS['primary']}; color: white; padding: 8px; font-weight: bold;")
         btn_save.clicked.connect(self._save_profile)
@@ -135,6 +160,28 @@ class AICoachPage(QWidget):
         else:
             html += '<li>按阶段规划进步</li><li>需要更高专项性</li><li>使用完整积累→强度→实现→减量周期</li>'
         html += '</ul>'
+
+        # v9.1: 周组数区间校验 + 关键原则 (来自训练科学规则层)
+        try:
+            report = build_weekly_volume_report(level, {'当前计划': self.in_weekly_sets.value()})
+            item = report['items'][0]
+            low, high = item['band']
+            color = {'合适': COLORS['success'], '偏少': COLORS['subtext'],
+                     '偏高': COLORS['warning'], '超出验证区间': COLORS['danger']}.get(item['verdict'], COLORS['text'])
+            html += (f'<h4>周组数校验</h4><p style="color:{color};">'
+                     f'当前 {item["planned_sets"]} 组/周 → <b>{item["verdict"]}</b> '
+                     f'(该等级起始区间 {low}–{high} 组, 上限 {item["ceiling"]} 组)</p>'
+                     f'<p>{item["action"]}</p>')
+        except Exception:
+            pass
+
+        html += ('<h4>本工具采用的判断口径</h4><ul>'
+                 '<li>RPE 10 = 0 RIR, 9 ≈ 1 RIR, 8 ≈ 2 RIR, 7 ≈ 3 RIR</li>'
+                 '<li>复合主项常规不做力竭; 孤立动作仅末组可接近力竭</li>'
+                 '<li>复合主项组间休息 ≥2.5 分钟, 孤立动作 ≥1.5 分钟</li>'
+                 '<li>一次训练只改变重量/次数/组数中的一个主要变量</li>'
+                 '<li>连续两次同类异常才怀疑周期结构, 单次状态差只维持观察</li>'
+                 '</ul>')
         self.lbl_level_result.setHtml(html)
 
     # ─── 子页2: 力量周期生成 ───
@@ -159,7 +206,17 @@ class AICoachPage(QWidget):
         ctrl.addWidget(QLabel('每周暴露:'))
         self.in_exposures = QSpinBox(); self.in_exposures.setRange(1, 4); self.in_exposures.setValue(2)
         ctrl.addWidget(self.in_exposures)
+
+        ctrl.addWidget(QLabel('训练等级:'))
+        self.in_cycle_level = QComboBox(); self.in_cycle_level.addItems(['P0', 'L1', 'L2', 'L3'])
+        self.in_cycle_level.setCurrentText('L1')
+        ctrl.addWidget(self.in_cycle_level)
         layout.addLayout(ctrl)
+
+        self.lbl_cycle_tip = QLabel('周期长度按每周暴露次数与目标决定: 8 周 (目标单一/高频) · 10 周 (一般力量发展) · 12 周 (低频或需完整阶段)')
+        self.lbl_cycle_tip.setWordWrap(True)
+        self.lbl_cycle_tip.setStyleSheet(f"color: {COLORS['subtext']}; padding: 4px;")
+        layout.addWidget(self.lbl_cycle_tip)
 
         btn = QPushButton('🎯 生成力量周期')
         btn.setStyleSheet(f"background-color: {COLORS['success']}; color: white; padding: 8px; font-weight: bold;")
@@ -177,24 +234,51 @@ class AICoachPage(QWidget):
         tgt = self.in_tgt_1rm.value()
         exp = self.in_exposures.value()
 
-        cycle = generate_strength_cycle(move, cur, tgt, exp)
+        exp = self.in_exposures.value()
+        if tgt <= cur:
+            self.cycle_result.setHtml(
+                f'<p style="color:{COLORS["danger"]};">目标 1RM 需高于当前 1RM, 否则周期没有推进空间</p>')
+            return
+        cycle = generate_strength_cycle(move, cur, tgt, exp,
+                                        level=self.in_cycle_level.currentText())
         save_cycle(cycle)
         md_path = export_cycle_to_markdown(cycle)
 
         html = f'<h3>{move} 力量周期 — {cycle.weeks}周</h3>'
-        html += f'<p>当前1RM: {cur}kg → 目标1RM: {tgt}kg</p>'
+        html += f'<p>当前1RM: {cur}kg → 目标1RM: {tgt}kg (每周暴露 {exp} 次)</p>'
         html += '<h4>阶段分布</h4><ul>'
         for phase, n in cycle.phase_distribution.items():
             html += f'<li><b>{phase}</b>: {n}周</li>'
-        html += '</ul><h4>每周安排</h4><table border="1" cellpadding="4" style="border-collapse:collapse;">'
-        html += '<tr><th>周</th><th>阶段</th><th>顶组</th><th>回退组</th></tr>'
+        html += '</ul>'
+
+        first = cycle.days[0] if cycle.days else None
+        if first is not None:
+            if first.warmup_sets:
+                warm = ' / '.join(
+                    f'{(w["label"] if w["weight"] <= 0 else str(w["weight"]) + "kg")} × {w["reps"]}'
+                    for w in first.warmup_sets)
+                html += f'<h4>热身流程(每周一致)</h4><p>{warm}</p>'
+            html += (f'<h4>执行口径</h4><ul>'
+                     f'<li>力竭使用: {first.failure_note}</li>'
+                     f'<li>组间休息: 复合主项 ≥2.5 分钟, 孤立动作 ≥1.5 分钟</li>'
+                     f'<li>节奏: 离心 {first.tempo.get("eccentric", "—")}, {first.tempo.get("note", "")}</li>'
+                     f'<li>回退组是计划内正式训练量, 顶上不去时用它替代, 不另外追加</li>'
+                     f'</ul>')
+
+        html += '<h4>每周安排</h4><table border="1" cellpadding="4" style="border-collapse:collapse;">'
+        html += '<tr><th>周</th><th>阶段</th><th>顶组</th><th>回退组</th><th>RPE 路径</th></tr>'
         for d in cycle.days:
             top = d.sets[0] if d.sets else None
             back = d.sets[1] if len(d.sets) > 1 else None
             top_s = f'{top.weight}kg {top.sets}×{top.reps}' if top else '—'
             back_s = f'{back.weight}kg {back.sets}×{back.reps}' if back else '—'
-            html += f'<tr><td>{d.week}</td><td>{d.phase}</td><td>{top_s}</td><td>{back_s}</td></tr>'
-        html += f'</table><p style="color:{COLORS["success"]};">✓ 已保存至: {md_path}</p>'
+            path_s = top.rpe_text if top else '—'
+            html += (f'<tr><td>{d.week}</td><td>{d.phase}</td><td>{top_s}</td>'
+                     f'<td>{back_s}</td><td>{path_s}</td></tr>')
+        html += '</table>'
+        html += f'<p style="color:{COLORS["success"]};">✓ 已保存至: {md_path}</p>'
+        html += ('<p style="color:' + COLORS['subtext'] + ';">验证方式: 成功不等于最终 1RM, '
+                 '还要看目标负荷下的动作质量、RPE、完成率与恢复</p>')
         self.cycle_result.setHtml(html)
 
     # ─── 子页3: 训练复盘 ───
@@ -218,7 +302,28 @@ class AICoachPage(QWidget):
         ctrl.addWidget(QLabel('RPE:'))
         self.in_rev_rpe = QDoubleSpinBox(); self.in_rev_rpe.setRange(1, 10); self.in_rev_rpe.setSingleStep(0.5); self.in_rev_rpe.setValue(7.5)
         ctrl.addWidget(self.in_rev_rpe)
+        ctrl.addWidget(QLabel('目标次数:'))
+        self.in_rev_target = QSpinBox(); self.in_rev_target.setRange(1, 30); self.in_rev_target.setValue(10)
+        ctrl.addWidget(self.in_rev_target)
         layout.addLayout(ctrl)
+
+        # v9.1: 反应式减载清单 (Helms: 0–1 项前进, 2+ 项减载一周)
+        signals = QHBoxLayout()
+        self.chk_reluctance = QCheckBox('不想训练')
+        self.chk_sleep = QCheckBox('睡眠变差')
+        self.chk_drop = QCheckBox('负荷/次数下降')
+        self.chk_stress = QCheckBox('生活压力大')
+        self.chk_pain = QCheckBox('疼痛加重')
+        for chk in (self.chk_reluctance, self.chk_sleep, self.chk_drop, self.chk_stress, self.chk_pain):
+            signals.addWidget(chk)
+        layout.addLayout(signals)
+
+        pain_row = QHBoxLayout()
+        pain_row.addWidget(QLabel('本次备注 / 疼痛描述:'))
+        self.in_rev_note = QLineEdit()
+        self.in_rev_note.setPlaceholderText('如: 训练中胸部不适 / 动作稳定, 无疼痛')
+        pain_row.addWidget(self.in_rev_note)
+        layout.addLayout(pain_row)
 
         btn = QPushButton('📝 复盘并生成下一次处方')
         btn.setStyleSheet(f"background-color: {COLORS['primary']}; color: white; padding: 8px; font-weight: bold;")
@@ -234,7 +339,18 @@ class AICoachPage(QWidget):
         layout.addWidget(hist_btn)
         return w
 
+    def _collect_signals(self):
+        return {
+            'reluctance': self.chk_reluctance.isChecked(),
+            'sleep_worse': self.chk_sleep.isChecked(),
+            'performance_drop': self.chk_drop.isChecked(),
+            'life_stress': self.chk_stress.isChecked(),
+            'pain': self.chk_pain.isChecked(),
+            'goal': '增肌',
+        }
+
     def _do_review(self):
+        note = self.in_rev_note.text().strip()
         log = TrainingLog(
             date=datetime.datetime.now().strftime('%Y-%m-%d'),
             movement=self.in_rev_move.text(),
@@ -242,20 +358,72 @@ class AICoachPage(QWidget):
             reps=self.in_rev_reps.value(),
             sets=self.in_rev_sets.value(),
             rpe=self.in_rev_rpe.value(),
+            notes=note,
         )
-        result = review_training(log)
+        level = assess_overall_level(self.profile)
+        try:
+            detail = review_report(
+                log,
+                level=level,
+                target_reps=self.in_rev_target.value(),
+                target_rpe=8.0,
+                pain_note=note,
+                signals=self._collect_signals(),
+            )
+        except Exception:
+            detail = None
+
+        result = review_training(
+            log, level=level,
+            target_reps=self.in_rev_target.value(),
+            target_rpe=8.0,
+            pain_note=note,
+            signals=self._collect_signals(),
+        )
         save_review(log, result)
 
-        color = {'合适': COLORS['success'], '偏轻': COLORS['warning'],
-                 '偏重': COLORS['danger'], '部分完成': COLORS['warning']}.get(result.judgment, COLORS['text'])
+        color = {'合适': COLORS['success'], '偏轻': COLORS['warning'], '偏重': COLORS['danger'],
+                 '部分完成': COLORS['warning'], '停滞': COLORS['accent'],
+                 '减载一周': COLORS['accent'], '预防性减载': COLORS['accent'],
+                 '暂停常规处方': COLORS['danger']}.get(result.judgment, COLORS['text'])
         html = f'<h3 style="color:{color};">判断: {result.judgment}</h3>'
         html += '<h4>关键发现</h4><ul>'
         for f in result.key_findings:
             html += f'<li>{f}</li>'
         html += '</ul>'
+
         rx = result.next_prescription
-        html += f'<h4>下一次处方</h4><p><b>{rx.get("movement","")}</b>: {rx.get("weight","")}kg × {rx.get("sets","")}组{rx.get("reps","")}次 @ RPE {rx.get("rpe","")}</p>'
+        html += f'<h4>下一次处方</h4><p><b>{rx.get("movement","")}</b>: {rx.get("weight","")}kg × '
+        html += f'{rx.get("sets", rx.get("movement_sets",""))}组 × {rx.get("reps","")}次</p>'
+        if rx.get('rpe_text'):
+            html += '<p>逐组 RPE: ' + ' → '.join(rx['rpe_text']) + '</p>'
+        elif rx.get('rpe'):
+            html += f'<p>目标 RPE: {rx["rpe"]}</p>'
+        if rx.get('rest'):
+            lo, hi = rx['rest']
+            html += f'<p>组间休息: {lo//60}–{hi//60} 分钟</p>'
+        if rx.get('failure'):
+            html += f'<p>力竭使用: {rx["failure"]["note"]}</p>'
+        if rx.get('tempo'):
+            html += f'<p>节奏/幅度: {rx["tempo"]["note"]}</p>'
         html += f'<p>渐进类型: <b>{result.progression_type}</b></p>'
+
+        if detail:
+            if detail.get('safety'):
+                html += f'<p style="color:{COLORS["danger"]};"><b>安全分流</b>: {detail["safety"]}</p>'
+            if detail.get('deload') and detail['deload']['verdict'] != '继续前进':
+                d = detail['deload']
+                html += (f'<p><b>减载判定</b>: {d["verdict"]} (命中 {d["count"]} 项: '
+                         f'{"、".join(d["hit"])}) — {d["action"]}</p>')
+            if detail.get('stall') and detail['stall']['is_stall']:
+                html += '<p><b>停滞提示</b>: ' + detail['stall']['hint'] + '</p>'
+            if detail.get('volume'):
+                v = detail['volume']
+                html += (f'<p><b>周组数</b>: {v["planned_sets"]} 组 → <b>{v["verdict"]}</b> '
+                         f'(起始区间 {v["band"][0]}–{v["band"][1]}) — {v["action"]}</p>')
+
+        html += ('<p style="color:' + COLORS['subtext'] + ';">一次训练只改变重量/次数/组数中的一个主要变量; '
+                 '单次状态差不等于平台期</p>')
         self.review_result.setHtml(html)
 
     def _show_history(self):
@@ -288,6 +456,12 @@ class AICoachPage(QWidget):
         ctrl.addWidget(QLabel('动作:'))
         self.in_ret_move = QLineEdit('卧推')
         ctrl.addWidget(self.in_ret_move)
+        ctrl.addWidget(QLabel('辅项(逗号分隔):'))
+        self.in_ret_support = QLineEdit('划船, 深蹲')
+        ctrl.addWidget(self.in_ret_support)
+        ctrl.addWidget(QLabel('每周次数:'))
+        self.in_ret_exposures = QSpinBox(); self.in_ret_exposures.setRange(1, 7); self.in_ret_exposures.setValue(2)
+        ctrl.addWidget(self.in_ret_exposures)
         layout.addLayout(ctrl)
 
         btn = QPushButton('↩️ 生成接回方案')
@@ -301,10 +475,13 @@ class AICoachPage(QWidget):
         return w
 
     def _gen_return(self):
+        support = [x.strip() for x in self.in_ret_support.text().replace('，', ',').split(',') if x.strip()]
         plan = generate_return_plan(
             self.in_days_off.value(),
             self.in_last_w.value(),
             self.in_ret_move.text(),
+            support,
+            self.in_ret_exposures.value(),
         )
         perm_color = {'正常接回': COLORS['success'], '降级接回': COLORS['warning'],
                       '最低任务': COLORS['accent'], '暂停': COLORS['danger']}.get(plan.permission, COLORS['text'])
@@ -314,10 +491,23 @@ class AICoachPage(QWidget):
         html += f'<li><b>正常版</b>: {plan.normal_version}</li>'
         html += f'<li><b>降级版</b>: {plan.degraded_version}</li>'
         html += f'<li><b>最低版</b>: {plan.minimal_version}</li>'
-        html += '</ul><h4>未来7天</h4><ol>'
+        html += '</ul>'
+        if getattr(plan, 'return_48h', ''):
+            html += f'<h4>48 小时内先完成</h4><p>{plan.return_48h}</p>'
+        if getattr(plan, 'exit_conditions', None):
+            html += '<h4>升级 / 维持 / 暂停条件</h4><ul>'
+            for k, label in (('upgrade', '升级'), ('hold', '维持'), ('stop', '暂停')):
+                if plan.exit_conditions.get(k):
+                    html += f'<li><b>{label}</b>: {plan.exit_conditions[k]}</li>'
+            html += '</ul>'
+        html += '<h4>未来7天</h4><ol>'
         for d in plan.next_7_days:
             html += f'<li>{d}</li>'
         html += '</ol>'
+        if getattr(plan, 'no_makeup_note', ''):
+            html += f'<p style="color:{COLORS["warning"]};">{plan.no_makeup_note}</p>'
+        html += ('<p style="color:' + COLORS['subtext'] + ';">接回成功的标准是恢复自主判断与稳定执行, '
+                 '而不是一周内回到停训前全部重量</p>')
         self.return_result.setHtml(html)
 
     # ─── 子页5: 最低执行版本 ───
@@ -325,23 +515,28 @@ class AICoachPage(QWidget):
         w = QWidget()
         layout = QVBoxLayout(w)
 
-        intro = QLabel('时间不足时自动生成短版训练，保留主线动作，不补课、不加倍训练、不用惩罚性有氧。')
+        intro = QLabel('时间不足时自动生成短版训练，保留主线动作，不补课、不加倍训练、不用惩罚性有氧。'
+                       '时间很紧时先减少低优先级附件，不压缩复合主项的组间休息。')
         intro.setWordWrap(True)
         intro.setStyleSheet(f"color: {COLORS['subtext']}; padding: 8px;")
         layout.addWidget(intro)
 
         ctrl = QHBoxLayout()
         ctrl.addWidget(QLabel('可用时间(分钟):'))
-        self.in_minutes = QSpinBox(); self.in_minutes.setRange(5, 60); self.in_minutes.setValue(20)
+        self.in_minutes = QSpinBox(); self.in_minutes.setRange(2, 60); self.in_minutes.setValue(20)
         ctrl.addWidget(self.in_minutes)
         layout.addLayout(ctrl)
 
         time_btns = QHBoxLayout()
-        for m in [30, 20, 10]:
+        for m in [30, 20, 10, 5, 2]:
             btn = QPushButton(f'{m}分钟版')
             btn.clicked.connect(lambda _, x=m: self._gen_short(x))
             time_btns.addWidget(btn)
         layout.addLayout(time_btns)
+
+        gap_btn = QPushButton('🔍 动作缺口审计 (推/拉/髋铰链/深蹲/负重行走/单腿)')
+        gap_btn.clicked.connect(self._audit_gaps)
+        layout.addWidget(gap_btn)
 
         self.short_result = QTextEdit()
         self.short_result.setReadOnly(True)
@@ -363,10 +558,53 @@ class AICoachPage(QWidget):
         html = f'<h3>{minutes}分钟短版训练</h3>'
         html += f'<p>动作: {move}</p>'
         html += f'<p><b>{short}</b></p>'
+        try:
+            detail = generate_short_plan(day, minutes)
+            html += '<h4>保留 / 舍弃</h4><ul>'
+            html += f'<li><b>保留</b>: {detail["keep"]}</li>'
+            html += f'<li><b>舍弃</b>: {detail["drop"]}</li>'
+            html += f'<li><b>休息</b>: {detail["rest"]} ({detail["super_set"]})</li>'
+            html += '</ul>'
+        except Exception:
+            detail = None
         html += '<h4>原则</h4><ul>'
-        html += '<li>优先保留当天主线动作</li>'
-        html += '<li>不补课、不加倍训练</li>'
-        html += '<li>不用惩罚性有氧</li>'
-        html += '<li>漏一次按原顺序继续，漏两次用短版接回</li>'
+        if detail:
+            for r in detail['rules']:
+                html += f'<li>{r}</li>'
+        else:
+            html += '<li>优先保留当天主线动作</li>'
+            html += '<li>不补课、不加倍训练</li>'
+            html += '<li>不用惩罚性有氧</li>'
         html += '</ul>'
+        self.short_result.setHtml(html)
+
+    def _audit_gaps(self):
+        """动作缺口审计 (Dan John Intervention): 审计表, 不是动作配额表。"""
+        if not SCIENCE_UI_AVAILABLE:
+            self.short_result.setHtml('<p>训练科学规则层未加载, 无法执行缺口审计</p>')
+            return
+        try:
+            cycles = load_reviews()
+        except Exception:
+            cycles = []
+        names = [self.in_cycle_move.currentText()] if hasattr(self, 'in_cycle_move') else []
+        result = audit_movement_gaps(names)
+        html = '<h3>动作模式缺口审计</h3>'
+        html += '<p>审计范围: 推 / 拉 / 髋铰链 / 深蹲 / 负重行走 / 单腿或旋转</p>'
+        html += '<h4>已覆盖</h4><ul>'
+        if result['covered']:
+            for pattern, hits in result['covered'].items():
+                html += f'<li><b>{pattern}</b>: {", ".join(hits)}</li>'
+        else:
+            html += '<li>当前选中的动作未覆盖任何模式</li>'
+        html += '</ul><h4>缺口</h4><ul>'
+        if result['gaps']:
+            for gap in result['gaps']:
+                html += f'<li>{gap}</li>'
+        else:
+            html += '<li>无缺口</li>'
+        html += '</ul>'
+        html += f'<p>{result["action"]}</p>'
+        html += (f'<p style="color:{COLORS["subtext"]};">缺失记录 {len(cycles)} 条; '
+                 '缺口审计只提示要检查什么, 不自动加动作, 也不诊断功能或预测受伤</p>')
         self.short_result.setHtml(html)
