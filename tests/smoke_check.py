@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 冒烟脚本 (v9.1) — 无需 GUI / 个人数据即可验证核心链路。
 
@@ -15,7 +14,6 @@
 退出码 0 = 全部通过; 非 0 = 有失败项。
 """
 
-import copy
 import os
 import py_compile
 import sys

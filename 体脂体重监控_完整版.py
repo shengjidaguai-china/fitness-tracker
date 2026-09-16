@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 体脂体重监控 + 健身计划软件 v9.0 — PySide6 重构版
 基于市场主流健身软件(Keep/Fitbod/Hevy/Strong)特性优化
@@ -16,32 +15,43 @@ v3.0.1: GUI解析版正式并入海豹徒手(Navy SEAL 六支柱+SEAL 500)与囚
 数据源: exercises-dataset (GitHub: yuppiez99999/exercises-dataset)
 """
 
-import sys
 import os
-from PySide6.QtGui import QFont
-from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QTabWidget, QLabel, QWidget,
-    QHBoxLayout
-)
+import sys
+
+from PySide6.QtGui import QColor, QFont, QIcon, QPalette
+from PySide6.QtWidgets import QApplication, QMainWindow
 
 # 确保能导入同目录模块
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from fitness_modules import (
-    BodyDataModel, ExerciseLibrary, TrainingPlanParser,
-    DashboardPage, TrendChartPage, ExerciseLibraryPage, TrainingPlanPage, NutritionPage,
-    AICoachPage, AI_COACH_AVAILABLE, COLORS,
+    AI_COACH_AVAILABLE,
+    COLORS,
+    AICoachPage,
+    BodyDataModel,
+    DashboardPage,
+    ExerciseLibrary,
+    ExerciseLibraryPage,
+    NutritionPage,
+    TrainingPlanPage,
+    TrainingPlanParser,
+    TrendChartPage,
 )
+from fitness_pkg.constants import build_global_stylesheet
+from fitness_pkg.shell import SidebarShell
+
+# 应用图标（随 PyInstaller datas 打包）
+APP_ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fitness_icon.ico")
 
 
 class MainWindow(QMainWindow):
-    """主窗口 — 4页Tab布局"""
+    """主窗口 — 左侧导航 + 内容栈"""
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('健身监控 v9.0 — 居家平替 v3.0 单杠+哑铃 · 海豹徒手+囚徒健身补位 · 体测数据 + 动作示范 + 训练计划')
+        self.setWindowTitle("健身监控 v9.0 — 居家平替 v3.0 · 体测/动作库/训练计划/饮食 · AI 教练")
         self.setMinimumSize(1200, 800)
         self.resize(1400, 900)
-        self._apply_global_style()
+        self.setWindowIcon(QIcon(APP_ICON))
 
         # 初始化数据模型
         self.body_model = BodyDataModel()
@@ -52,100 +62,53 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._update_status()
 
-    def _apply_global_style(self):
-        """全局暗色主题样式"""
-        self.setStyleSheet(f"""
-            QMainWindow {{ background-color: {COLORS['bg']}; }}
-            QTabWidget::pane {{ border: 1px solid {COLORS['border']}; border-radius: 8px;
-                                background-color: {COLORS['bg']}; }}
-            QTabBar::tab {{ background-color: {COLORS['card']}; color: {COLORS['subtext']};
-                            padding: 10px 20px; margin: 2px; border-radius: 6px 6px 0 0;
-                            font-size: 12px; font-weight: bold; }}
-            QTabBar::tab:selected {{ background-color: {COLORS['primary']}; color: white; }}
-            QTabBar::tab:hover:!selected {{ background-color: {COLORS['border']}; }}
-            QStatusBar {{ background-color: {COLORS['card']}; color: {COLORS['subtext']}; }}
-            QMenuBar {{ background-color: {COLORS['card']}; color: {COLORS['text']}; }}
-            QMenuBar::item:selected {{ background-color: {COLORS['primary']}; }}
-            QMenu {{ background-color: {COLORS['card']}; color: {COLORS['text']};
-                     border: 1px solid {COLORS['border']}; }}
-            QMenu::item:selected {{ background-color: {COLORS['primary']}; }}
-        """)
-
     def _build_ui(self):
-        # 顶部标题栏
-        header = QWidget()
-        header.setFixedHeight(50)
-        header.setStyleSheet(f"background-color: {COLORS['card']}; border-bottom: 1px solid {COLORS['border']};")
-        hl = QHBoxLayout(header)
-        hl.setContentsMargins(16, 8, 16, 8)
-
-        title = QLabel('💪 健身监控 v9.0')
-        title.setFont(QFont('Microsoft YaHei', 14, QFont.Bold))
-        title.setStyleSheet(f"color: {COLORS['primary']};")
-        hl.addWidget(title)
-
-        subtitle = QLabel('体测数据 · 动作示范 · 训练计划 · 饮食补剂 一体化')
-        subtitle.setStyleSheet(f"color: {COLORS['subtext']};")
-        hl.addWidget(subtitle)
-        hl.addStretch()
-
-        # 数据统计速览
-        self.lbl_quick_stats = QLabel('加载中...')
-        self.lbl_quick_stats.setStyleSheet(f"color: {COLORS['success']}; font-weight: bold;")
-        hl.addWidget(self.lbl_quick_stats)
-
-        self.setMenuWidget(header)
-
-        # 中央Tab部件
-        self.tabs = QTabWidget()
+        self.tabs = SidebarShell()
         self.setCentralWidget(self.tabs)
+        self.lbl_quick_stats = self.tabs.lbl_quick_stats
 
-        # 页面1: 仪表盘
         self.page_dashboard = DashboardPage(self.body_model)
         self.page_dashboard.record_added.connect(self._on_data_changed)
-        self.tabs.addTab(self.page_dashboard, '📊 仪表盘')
+        self.tabs.add_page(self.page_dashboard, "仪表盘", "nav_dashboard", "📊")
 
-        # 页面2: 趋势分析
         self.page_trend = TrendChartPage(self.body_model)
-        self.tabs.addTab(self.page_trend, '📈 趋势分析')
+        self.tabs.add_page(self.page_trend, "趋势分析", "nav_trend", "📈")
 
-        # 页面3: 动作示范库
         self.page_exercises = ExerciseLibraryPage(self.exercise_lib)
-        self.tabs.addTab(self.page_exercises, f'🏋️ 动作库 ({len(self.exercise_lib.exercises)})')
+        n_ex = len(self.exercise_lib.exercises)
+        self.tabs.add_page(self.page_exercises, f"动作库 ({n_ex})", "nav_exercises", "🏋️")
 
-        # 页面4: 训练计划
         self.page_plan = TrainingPlanPage(self.training_plan, self.exercise_lib)
-        self.tabs.addTab(self.page_plan, '📅 训练计划(22周)')
+        self.tabs.add_page(self.page_plan, "训练计划", "nav_plan", "📅")
 
-        # 页面5: 饮食与补剂
         self.page_nutrition = NutritionPage()
-        self.tabs.addTab(self.page_nutrition, '🍽 饮食与补剂')
+        self.tabs.add_page(self.page_nutrition, "饮食与补剂", "nav_nutrition", "🍽")
 
-        # 页面6: AI 教练 (Lzheng-fitness 知识库集成)
         if AI_COACH_AVAILABLE:
             self.page_coach = AICoachPage()
-            self.tabs.addTab(self.page_coach, '🤖 AI 教练')
+            self.tabs.add_page(self.page_coach, "AI 教练", "nav_coach", "🤖")
 
-        # 状态栏
-        self.statusBar().showMessage('就绪 · 5个模块已加载' + (' + AI 教练' if AI_COACH_AVAILABLE else '') + ' · 居家平替 v3.0 单杠+哑铃 · 海豹徒手+囚徒健身补位体系')
+        self.statusBar().showMessage(
+            "就绪 · 居家平替 v3.0 单杠+哑铃" + (" · AI 教练已加载" if AI_COACH_AVAILABLE else "")
+        )
 
     def _update_status(self):
-        """更新顶部快速统计"""
+        """更新侧栏快速统计"""
         stats = self.body_model.get_stats()
-        if stats['count'] == 0:
-            self.lbl_quick_stats.setText('暂无数据')
+        if stats["count"] == 0:
+            self.lbl_quick_stats.setText("暂无体测记录")
             return
-        w = stats['cur_weight']
-        f = stats['cur_fat']
-        fat_text = f' / {f:.1f}%体脂' if f == f else ''  # NaN检查
-        self.lbl_quick_stats.setText(f'当前: {w:.1f}kg{fat_text}  ·  {stats["count"]}条记录')
+        w = stats["cur_weight"]
+        f = stats["cur_fat"]
+        fat_text = f"\n体脂 {f:.1f}%" if f == f else ""
+        self.lbl_quick_stats.setText(f"当前 {w:.1f} kg{fat_text}\n{stats['count']} 条记录")
 
     def _on_data_changed(self):
         """数据变化时刷新所有页面"""
         self.page_dashboard.refresh()
         self.page_trend._draw()
         self._update_status()
-        self.statusBar().showMessage('数据已更新', 3000)
+        self.statusBar().showMessage("数据已更新", 3000)
 
     def closeEvent(self, event):
         """关闭时保存"""
@@ -157,18 +120,44 @@ class MainWindow(QMainWindow):
 # 启动
 # ═══════════════════════════════════════════════════════════
 
+
 def main():
     app = QApplication(sys.argv)
-    app.setApplicationName('健身监控 v9.0')
+    app.setApplicationName("健身监控 v9.0")
+
+    # Fusion 引擎统一观感（跨 Windows 主题表现一致）
+    app.setStyle("Fusion")
 
     # 全局字体
-    font = QFont('Microsoft YaHei', 10)
+    font = QFont("Microsoft YaHei", 10)
     app.setFont(font)
+
+    # 调色板（作用于未单独内联样式的系统控件与对话框）
+    pal = app.palette()
+    pal.setColor(QPalette.Window, QColor(COLORS["bg"]))
+    pal.setColor(QPalette.WindowText, QColor(COLORS["text"]))
+    pal.setColor(QPalette.Base, QColor(COLORS["card"]))
+    pal.setColor(QPalette.AlternateBase, QColor(COLORS["table_alt"]))
+    pal.setColor(QPalette.Text, QColor(COLORS["text"]))
+    pal.setColor(QPalette.Button, QColor(COLORS["card"]))
+    pal.setColor(QPalette.ButtonText, QColor(COLORS["text"]))
+    pal.setColor(QPalette.ToolTipBase, QColor(COLORS["card"]))
+    pal.setColor(QPalette.ToolTipText, QColor(COLORS["text"]))
+    pal.setColor(QPalette.Highlight, QColor(COLORS["primary"]))
+    pal.setColor(QPalette.HighlightedText, QColor(COLORS["appbar_text"]))
+    app.setPalette(pal)
+
+    # 全局现代样式（滚动条 / Tab / 输入框 / 下拉 / 默认按钮）
+    app.setStyleSheet(build_global_stylesheet())
+
+    icon = QIcon(APP_ICON)
+    if not icon.isNull():
+        app.setWindowIcon(icon)
 
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

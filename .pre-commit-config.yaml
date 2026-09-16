@@ -1,0 +1,39 @@
+# pre-commit 配置 —— 提交前自动代码质量门禁
+# 安装:  .\.venv\Scripts\python.exe -m pre_commit install
+# 手动:  .\.venv\Scripts\python.exe -m pre_commit run --all-files
+# 文档:  https://pre-commit.com  |  https://github.com/astral-sh/ruff-pre-commit
+
+exclude: |
+  (?x)(
+    ^\.venv/ |
+    ^dist/ |
+    ^build/ |
+    ^Lzheng-fitness/ |
+    ^fitness-tracker/ |
+    ^fitness-tracker-remote/ |
+    ^exercises-dataset/ |
+    ^BettaFish/ |
+    ^补全数据\.py$ |
+    ^体脂体重监控全系列脚本/ |
+    ^体重体脂监控/个人训练系统/
+  )
+
+repos:
+  # 通用基础钩子 (pre-commit/pre-commit-hooks)
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: [--maxkb=2048]
+      - id: check-merge-conflict
+
+  # ruff —— lint + 自动修复
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.6
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format

@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "健身监控 v9.0 架构",
+    "output": "docs/fitness-arch.html",
+    "quality_profile": "showcase",
+    "viewBox": [1000, 720]
+  },
+  "components": [
+    { "id": "main_entry", "type": "frontend", "label": "主入口", "sublabel": "完整版.py · MainWindow", "pos": [30, 60], "size": [160, 60] },
+    { "id": "shell", "type": "frontend", "label": "侧边栏壳层", "sublabel": "SidebarShell", "pos": [30, 180], "size": [160, 70] },
+    { "id": "constants", "type": "backend", "label": "设计系统", "sublabel": "constants.py · QSS", "pos": [30, 290], "size": [160, 60] },
+
+    { "id": "dashboard", "type": "frontend", "label": "仪表盘", "sublabel": "DashboardPage", "pos": [260, 120], "size": [160, 56] },
+    { "id": "trend", "type": "frontend", "label": "趋势分析", "sublabel": "TrendChartPage", "pos": [260, 200], "size": [160, 56] },
+    { "id": "exercises", "type": "frontend", "label": "动作库", "sublabel": "ExerciseLibraryPage", "pos": [260, 280], "size": [160, 56] },
+    { "id": "plan", "type": "frontend", "label": "训练计划", "sublabel": "TrainingPlanPage", "pos": [260, 360], "size": [160, 56] },
+    { "id": "nutrition", "type": "frontend", "label": "饮食与补剂", "sublabel": "NutritionPage", "pos": [260, 440], "size": [160, 56] },
+    { "id": "coach", "type": "frontend", "label": "AI 教练", "sublabel": "AICoachPage", "pos": [260, 520], "size": [160, 56] },
+
+    { "id": "data_model", "type": "backend", "label": "体测数据模型", "sublabel": "BodyDataModel", "pos": [500, 152], "size": [170, 60] },
+    { "id": "exercise_lib", "type": "backend", "label": "动作库引擎", "sublabel": "ExerciseLibrary", "pos": [500, 268], "size": [170, 60] },
+    { "id": "parsers", "type": "backend", "label": "解析器", "sublabel": "计划 + 营养 Parser", "pos": [500, 388], "size": [170, 60] },
+    { "id": "ai_engine", "type": "backend", "label": "AI 教练引擎", "sublabel": "ai_coach_engine.py", "pos": [500, 520], "size": [170, 60] },
+
+    { "id": "data_store", "type": "database", "label": "本地数据", "sublabel": "txt + json + gif + md", "pos": [780, 268], "size": [180, 90] },
+    { "id": "ai_model", "type": "external", "label": "AI 模型", "sublabel": "豆包 / GLM-5", "pos": [780, 520], "size": [180, 60] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "PySide6 桌面应用进程", "wraps": ["main_entry", "shell", "constants", "dashboard", "trend", "exercises", "plan", "nutrition", "coach", "data_model", "exercise_lib", "parsers", "ai_engine"] },
+    { "kind": "security-group", "label": "本地数据目录 体重体脂监控/", "wraps": ["data_store"] }
+  ],
+  "connections": [
+    { "from": "main_entry", "to": "shell", "label": "构建", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "labelAt": [125, 150] },
+    { "from": "shell", "to": "dashboard" },
+    { "from": "shell", "to": "trend" },
+    { "from": "shell", "to": "exercises" },
+    { "from": "shell", "to": "plan" },
+    { "from": "shell", "to": "nutrition" },
+    { "from": "shell", "to": "coach" },
+    { "from": "dashboard", "to": "data_model", "label": "读写", "labelDy": -18 },
+    { "from": "trend", "to": "data_model" },
+    { "from": "exercises", "to": "exercise_lib" },
+    { "from": "plan", "to": "parsers" },
+    { "from": "nutrition", "to": "parsers" },
+    { "from": "coach", "to": "ai_engine", "label": "调用" },
+    { "from": "data_model", "to": "data_store", "label": "txt", "labelDy": -24 },
+    { "from": "exercise_lib", "to": "data_store", "label": "json+gif" },
+    { "from": "parsers", "to": "data_store", "label": "md", "labelDy": 24 },
+    { "from": "ai_engine", "to": "ai_model", "label": "API", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "UI 层", "items": ["主入口 + 侧边栏壳层 + 设计系统", "6 个功能页面: 仪表盘/趋势/动作库/计划/饮食/AI 教练", "QSS 统一样式 + QGraphicsDropShadowEffect 卡片阴影"] },
+    { "dot": "emerald", "title": "业务逻辑层", "items": ["BodyDataModel 体测数据 12 指标", "ExerciseLibrary 38 动作 + GIF", "TrainingPlan/Nutrition Parser 解析 MD", "ai_coach_engine 调用云端 LLM"] },
+    { "dot": "rose", "title": "数据与外部", "items": ["本地数据目录: 体测 txt + 动作 json/gif + 计划 md", "AI 模型: 豆包 Speed → GLM-5 → DeepSeek", "PyInstaller 打包为单 EXE 分发"] }
+  ]
+}

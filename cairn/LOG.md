@@ -12,8 +12,8 @@
 - 持久化：`_read_json` 编码探测 + `.bad` 备份，`_atomic_write_json` 原子写；建档缺字段/多字段不再崩溃。
 - 打包：`.gitmodules` 移除不存在的 `BettaFish`；3 个 spec 收敛为「主 + 调试」两套；`build_exe.py` 补 `--icon`。
 - README：结构树/模块名/脚本名与实际对齐，AI 教练章补规则层说明与校验命令，移除失效 Star History 图表。
-- 验证：`python tests/smoke_check.py` 4 组通过；`python -m unittest discover -s tests` **91 项通过**（10 项跳过：云端无 PySide6）。GUI 未动布局，仍需本地 Windows 目视确认。
-- 冲突收口：PR #2 的实现先合并进 master，本分支（PR #3）改为「科学版口径 + 规则层实现」的合并版，新 commit 合并 master 并解决 6 个文件冲突。
+- 验证：`python tests/smoke_check.py` 4 组通过；`python -m pytest tests` 通过（AI 引擎/规则层/数据层，UI 用例云端自动跳过）。GUI 未动布局，仍需本地 Windows 目视确认。
+- 冲突收口：master 先合并了 PR #2，又推进到 v10.x（ruff + pre-commit + pytest + 架构图）。本分支两次合并 master，冲突文件按「科学版口径 + 规则层实现」合并，并按 `pyproject.toml` 的 ruff 配置（target py38 / quote-style double）统一格式，`ruff check` 全绿。
 
 ## 2026-09-03 初始化 CNB 双轨 NPC 配置
 - 克隆 GitHub `yuppiez99999/fitness-tracker` 到本地 `e:/各种PY程序/fitness-tracker`，生成 `.cnb.yml` + `.cnb/settings.yml`（照搬量化系统 28-终极量化交易系统8.4 的双轨模式，prompt 改写为健身监控上下文）。

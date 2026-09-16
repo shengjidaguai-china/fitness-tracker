@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 ai_coach_engine 规则层单元测试
 覆盖: RPE/RIR 换算、e1RM 与负荷换算互逆、周组数校验、复合禁止力竭、
@@ -13,12 +12,24 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ai_coach_engine import (  # noqa: E402
-    TrainingLog, ReviewResult,
-    generate_short_version, generate_strength_cycle, generate_return_plan,
-    estimate_1rm, calc_target_weight, rpe_to_rir, review_training,
-    screen_danger, deload_signals, weekly_set_range, check_weekly_sets,
-    allows_failure, is_compound, rest_seconds, determine_cycle_length,
+from ai_coach_engine import (
+    ReviewResult,
+    TrainingLog,
+    allows_failure,
+    calc_target_weight,
+    check_weekly_sets,
+    deload_signals,
+    determine_cycle_length,
+    estimate_1rm,
+    generate_return_plan,
+    generate_short_version,
+    generate_strength_cycle,
+    is_compound,
+    rest_seconds,
+    review_training,
+    rpe_to_rir,
+    screen_danger,
+    weekly_set_range,
 )
 
 
@@ -132,8 +143,8 @@ class TestCycle(unittest.TestCase):
 
 class TestReview(unittest.TestCase):
     def _log(self, **kw):
-        base = dict(date='2026-09-16', movement='卧推', weight=80.0,
-                    reps=8, sets=4, rpe=7.5)
+        base = {'date': '2026-09-16', 'movement': '卧推', 'weight': 80.0,
+                'reps': 8, 'sets': 4, 'rpe': 7.5}
         base.update(kw)
         return TrainingLog(**base)
 

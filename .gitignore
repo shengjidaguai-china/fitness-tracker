@@ -53,6 +53,8 @@ github_trending_*.md
 __pycache__/
 *.py[cod]
 *.cache
+.pytest_cache/
+.ruff_cache/
 .venv/
 venv/
 env/

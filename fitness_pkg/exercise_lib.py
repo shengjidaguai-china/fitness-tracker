@@ -1,10 +1,10 @@
-# -*- coding: utf-8 -*-
 """
 动作库 (v7.0 模块化拆分)
 加载 exercises_matched.json + GIF 路径管理 + 首帧缩略图缓存。
 """
-import os
+
 import json
+import os
 from typing import Dict, List, Optional
 
 from PySide6.QtGui import QPixmap
@@ -25,23 +25,25 @@ class ExerciseLibrary:
 
     def _load(self):
         if os.path.exists(EXERCISES_JSON):
-            with open(EXERCISES_JSON, 'r', encoding='utf-8') as f:
+            with open(EXERCISES_JSON, encoding="utf-8") as f:
                 self.exercises = json.load(f)
 
     def _precheck_gifs(self):
         """预检所有GIF文件有效性 — 批量验证避免后续逐个检查"""
         for ex in self.exercises:
-            mid = ex.get('media_id', '')
+            mid = ex.get("media_id", "")
             if not mid:
                 continue
-            p = os.path.join(GIF_DIR, f'{mid}.gif')
+            p = os.path.join(GIF_DIR, f"{mid}.gif")
             valid = False
             if os.path.exists(p) and os.path.getsize(p) > 0:
                 # 仅当 QApplication 已初始化时才用 QMovie 深度校验
                 from PySide6.QtWidgets import QApplication
+
                 if QApplication.instance() is not None:
                     try:
                         from PySide6.QtGui import QMovie
+
                         movie = QMovie(p)
                         valid = movie.isValid() and movie.frameCount() >= 1
                         movie.setPaused(True)
@@ -55,13 +57,13 @@ class ExerciseLibrary:
 
     def get_by_media_id(self, media_id: str) -> Optional[Dict]:
         for ex in self.exercises:
-            if ex.get('media_id') == media_id:
+            if ex.get("media_id") == media_id:
                 return ex
         return None
 
     def get_by_name(self, name_cn: str) -> Optional[Dict]:
         for ex in self.exercises:
-            if ex.get('name_cn') == name_cn:
+            if ex.get("name_cn") == name_cn:
                 return ex
         return None
 
@@ -69,11 +71,14 @@ class ExerciseLibrary:
         kw = keyword.lower().strip()
         if not kw:
             return self.exercises
-        return [e for e in self.exercises
-                if kw in (e.get('name_cn') or '').lower() or
-                kw in (e.get('name_en') or '').lower() or
-                kw in (e.get('target') or '').lower() or
-                kw in (e.get('category') or '').lower()]
+        return [
+            e
+            for e in self.exercises
+            if kw in (e.get("name_cn") or "").lower()
+            or kw in (e.get("name_en") or "").lower()
+            or kw in (e.get("target") or "").lower()
+            or kw in (e.get("category") or "").lower()
+        ]
 
     def gif_path(self, media_id: str) -> Optional[str]:
         """获取GIF路径 — 使用预检缓存快速返回"""
@@ -82,7 +87,7 @@ class ExerciseLibrary:
         if media_id in self._gif_cache:
             return self._gif_cache[media_id]
         # 回退: 直接检查文件
-        p = os.path.join(GIF_DIR, f'{media_id}.gif')
+        p = os.path.join(GIF_DIR, f"{media_id}.gif")
         valid = os.path.exists(p) and os.path.getsize(p) > 0
         self._gif_cache[media_id] = p if valid else None
         self._gif_valid[media_id] = valid
@@ -112,8 +117,9 @@ class ExerciseLibrary:
         if gif_path is None:
             return None
         try:
+            from PySide6.QtCore import QBuffer, QByteArray, QIODevice
             from PySide6.QtGui import QImageReader
-            from PySide6.QtCore import QByteArray, QBuffer, QIODevice
+
             reader = QImageReader(gif_path)
             reader.setAutoTransform(True)
             img = reader.read()  # 读取首帧
@@ -125,7 +131,7 @@ class ExerciseLibrary:
                 qba = QByteArray()
                 buf = QBuffer(qba)
                 buf.open(QIODevice.WriteOnly)
-                pm.save(buf, 'PNG')
+                pm.save(buf, "PNG")
                 buf.close()
                 self._gif_first_frame[media_id] = bytes(qba)
             return pm

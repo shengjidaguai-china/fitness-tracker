@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 fitness_pkg — 健身监控模块化包 (v7.0)
 将原本单文件 fitness_modules.py 拆分为:
@@ -10,25 +9,49 @@ fitness_pkg — 健身监控模块化包 (v7.0)
   ui_pages.py    5个UI页面
   ai_coach.py    AI 教练页面
 """
+
+from .ai_coach import AI_COACH_AVAILABLE, AICoachPage
 from .constants import (
-    COLORS, MUSCLE_EMOJI, VACUUM_TUTORIAL, FLOW_TUTORIAL,
-    TRAINING_SCHEDULE, PHASE_INFO, BODY_COLUMNS, DATA_FILE,
+    BODY_COLUMNS,
+    COLORS,
+    DATA_FILE,
+    FLOW_TUTORIAL,
+    MUSCLE_EMOJI,
+    PHASE_INFO,
+    TRAINING_SCHEDULE,
+    VACUUM_TUTORIAL,
 )
 from .data_model import BodyDataModel
-from .exercise_lib import ExerciseLibrary
-from .parsers import TrainingPlanParser, NutritionParser
 from .dialogs import ExerciseDetailDialog
+from .exercise_lib import ExerciseLibrary
+from .parsers import NutritionParser, TrainingPlanParser
 from .ui_pages import (
-    DashboardPage, TrendChartPage, ExerciseLibraryPage,
-    TrainingPlanPage, NutritionPage,
+    DashboardPage,
+    ExerciseLibraryPage,
+    NutritionPage,
+    TrainingPlanPage,
+    TrendChartPage,
 )
-from .ai_coach import AICoachPage, AI_COACH_AVAILABLE
 
 __all__ = [
-    'COLORS', 'MUSCLE_EMOJI', 'VACUUM_TUTORIAL', 'FLOW_TUTORIAL',
-    'TRAINING_SCHEDULE', 'PHASE_INFO', 'BODY_COLUMNS', 'DATA_FILE',
-    'BodyDataModel', 'ExerciseLibrary', 'TrainingPlanParser', 'NutritionParser',
-    'ExerciseDetailDialog', 'DashboardPage', 'TrendChartPage',
-    'ExerciseLibraryPage', 'TrainingPlanPage', 'NutritionPage',
-    'AICoachPage', 'AI_COACH_AVAILABLE',
+    "AI_COACH_AVAILABLE",
+    "BODY_COLUMNS",
+    "COLORS",
+    "DATA_FILE",
+    "FLOW_TUTORIAL",
+    "MUSCLE_EMOJI",
+    "PHASE_INFO",
+    "TRAINING_SCHEDULE",
+    "VACUUM_TUTORIAL",
+    "AICoachPage",
+    "BodyDataModel",
+    "DashboardPage",
+    "ExerciseDetailDialog",
+    "ExerciseLibrary",
+    "ExerciseLibraryPage",
+    "NutritionPage",
+    "NutritionParser",
+    "TrainingPlanPage",
+    "TrainingPlanParser",
+    "TrendChartPage",
 ]

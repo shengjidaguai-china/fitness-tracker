@@ -4,7 +4,7 @@
 
 # 健身监控 v9.0
 
-**个人体脂体重监控 + 健身计划 + AI 教练 · PySide6 桌面应用**
+**个人体脂体重监控 + 健身计划 + AI 教练**
 
 *基于 Keep / Fitbod / Hevy / Strong 特性优化，深度集成 [Lzheng-fitness](https://github.com/yuppiez99999/Lzheng-fitness) 训练知识库*
 
@@ -17,7 +17,7 @@
 [![Stars](https://img.shields.io/github/stars/yuppiez99999/fitness-tracker?style=flat-square&logo=github)](https://github.com/yuppiez99999/fitness-tracker/stargazers)
 [![Issues](https://img.shields.io/github/issues/yuppiez99999/fitness-tracker?style=flat-square&logo=github)](https://github.com/yuppiez99999/fitness-tracker/issues)
 
-**[功能亮点](#-功能亮点) · [AI 教练](#-ai-教练-v90-新增) · [快速开始](#-快速开始) · [架构](#-技术架构) · [知识库](#-lzheng-fitness-知识库) · [许可证](#-许可证)**
+**[功能亮点](#-功能亮点) · [界面预览](#-界面预览) · [AI 教练](#-ai-教练-v90-新增) · [快速开始](#-快速开始) · [架构](#-技术架构) · [知识库](#-lzheng-fitness-知识库) · [许可证](#-许可证)**
 
 ---
 
@@ -30,6 +30,8 @@
 >
 > 支持 PyInstaller 一键封装为独立 .exe，免安装 Python 直接运行。
 
+---
+
 ## ✨ 功能亮点
 
 | 模块 | 功能 |
@@ -40,6 +42,53 @@
 | 📅 **训练计划** | 22 周宽背窄腰塑形 v2.1（三阶段周期化，6 练 1 休）· 点击动作看示范 |
 | 🍽 **饮食与补剂** | 三阶段营养方案 · 五餐明细 · 补剂表 · 饮水指南 |
 | 🤖 **AI 教练** | 基于 Lzheng-fitness 知识库的增肌规划系统（5 个子功能 · 规则层带单元测试） |
+
+---
+
+## 🖼️ 界面预览
+
+### 🏋️ 动作示范库
+<p align="center">
+  <img src="assets/screenshots/01_exercise_library.png" alt="动作示范库" width="95%">
+</p>
+
+> 66 个动作的网格卡片布局，支持按动作名 / 肌群 / 器材搜索，点击卡片即可查看 GIF 示范与详细步骤教学。
+
+---
+
+### 📅 训练计划（22 周周期化）
+
+<p align="center">
+  <img src="assets/screenshots/02_training_plan_1.png" alt="训练计划 周一至周三" width="95%">
+</p>
+
+<p align="center">
+  <img src="assets/screenshots/03_training_plan_2.png" alt="训练计划 周四至周日" width="95%">
+</p>
+
+> 6 练 1 休的完整周期安排：背（宽）→ 胸 + 三头 → 腿 → 背（厚）+ 二头 → 肩 + 核心 → 推 + 腿泵感 → 完全休息。每日动作带 GIF 预览、组数次数标注与替代方案说明。
+
+---
+
+### 🍽 饮食与补剂方案
+
+<p align="center">
+  <img src="assets/screenshots/04_nutrition.png" alt="饮食与补剂" width="95%">
+</p>
+
+> 训练日 / 休息日差异化热量结构，实时追踪蛋白质、碳水、脂肪三大宏量。五餐明细含精确克数与热量标注，补剂方案按训练前后时段智能推荐。
+
+---
+
+### 🤖 AI 教练
+
+<p align="center">
+  <img src="assets/screenshots/05_ai_coach.png" alt="AI 教练" width="95%">
+</p>
+
+> 基于 Lzheng-fitness 六位专家知识库的纯本地智能规划。建档后自动评估 P0-L3 训练阶段，生成个性化力量周期、训练复盘与停训接回方案。
+
+---
 
 ## 🤖 AI 教练 (v9.0 新增 · v9.1 科学规则层)
 
@@ -88,6 +137,8 @@ flowchart LR
     G --> B
 ```
 
+---
+
 ## 🚀 快速开始
 
 ### 方式一 · 免安装运行（推荐）
@@ -133,6 +184,34 @@ python -m PyInstaller 健身监控v9.0.spec --noconfirm --clean
 
 > 启动异常需要看报错时，改用 `健身监控_debug.spec`（保留控制台窗口，产物名 `健身监控v9.0_debug`）。
 
+---
+
+### 🛠️ 代码质量工程化（集成自 GitHub 开源工具）
+
+主代码（`fitness_pkg/`、`ai_coach_engine.py` 等）集成三条开源质量链，提交即自动把关：
+
+| 工具 | GitHub 仓库 | 作用 |
+|:-----|:------------|:-----|
+| **ruff** | [astral-sh/ruff](https://github.com/astral-sh/ruff) | 极速 Python lint + formatter（替代 flake8/black/isort） |
+| **pre-commit** | [pre-commit/pre-commit](https://github.com/pre-commit/pre-commit) | git 提交钩子，自动跑通用检查 + ruff |
+| **pytest** | [pytest-dev/pytest](https://github.com/pytest-dev/pytest) | 60 项单元/构造冒烟测试（数据层/解析器/AI 引擎） |
+
+```bash
+# 一次性安装钩子（此后每次 git commit 自动检查）
+.\.venv\Scripts\python.exe -m pre_commit install
+
+# 手动跑全部检查
+.\.venv\Scripts\python.exe -m ruff check .        # lint
+.\.venv\Scripts\python.exe -m ruff format .        # 统一格式
+.\.venv\Scripts\python.exe -m pytest tests         # 测试
+.\.venv\Scripts\python.exe -m pre_commit run --all-files
+```
+
+质量基线：**目标 Python 3.8 兼容**（`pyproject.toml` → `[tool.ruff] target-version`），
+个人/归档脚本（`补全数据.py`、`体脂体重监控全系列脚本/` 等）已排除在门禁外。
+
+---
+
 ## 🏗️ 技术架构
 
 ```mermaid
@@ -145,7 +224,7 @@ flowchart TB
     subgraph Core["⚙️ 核心模块"]
         B1[fitness_pkg<br>模型/页面/解析器]
         B2[ai_coach_engine<br>P0-L3/周期/复盘/接回/短版]
-        B3[tests<br>冒烟检查 + 91 项单元测试]
+        B3[tests<br>冒烟检查 + pytest 用例]
     end
     subgraph Data["💾 数据层"]
         C1[本地体测数据<br>12 项指标]
@@ -153,15 +232,27 @@ flowchart TB
         C3[Lzheng-fitness<br>六专家知识库]
     end
     GUI --> Core --> Data
-```
+ ```
+
+### 📐 架构总览（archify 生成）
+
+<p align="center">
+  <img src="docs/fitness-arch.visual-check.1440x900.light.png" alt="健身监控 v9.0 架构总览" width="95%">
+</p>
+
+> 14 节点架构图：主入口 → 侧边栏壳层 → 6 个功能页面 → 4 个业务逻辑模块 → 本地数据 / AI 模型。
+> 完整交互式架构图（支持主题切换 / 平移缩放 / 关系追踪）见 [`docs/fitness-arch.html`](docs/fitness-arch.html)（下载后本地打开）。
 
 | 类别 | 技术 |
 |:-----|:-----|
 | GUI 框架 | PySide6 |
 | 数据/绘图 | matplotlib · pandas · numpy · Pillow |
 | 打包分发 | PyInstaller |
+| 代码质量 | ruff · pre-commit · pytest（详见「代码质量工程化」） |
 | 数据源 | [exercises-dataset](https://github.com/yuppiez99999/exercises-dataset)（Git 子模块） |
 | 知识库 | [Lzheng-fitness](https://github.com/yuppiez99999/Lzheng-fitness)（Git 子模块） |
+
+---
 
 ## 🧠 AI 教练知识来源
 
@@ -175,6 +266,8 @@ Lzheng-fitness 知识库包含 6 个来源限定专家模块：
 | Greg Nuckols | 力量停滞 | 突破平台期、变量实验 |
 | Dan John | 基础训练 | 目标脱节时回到基础 |
 | Brukner & Khan | 临床运动 | 安全筛查、疼痛分流 |
+
+---
 
 ## 📚 Lzheng-fitness 知识库
 
@@ -200,6 +293,8 @@ python Lzheng-fitness/tools/install.py --platform codex --all
 
 安装完成后，在新对话中说"**开始建立我的健身系统。**"即可由 AI 引导完成建档、动作重量校准、正式计划与工作台。发布前可用 `python Lzheng-fitness/tools/validate_bundle.py` 验证（检查元数据、链接、隐私残留与脚本语法）。
 
+---
+
 ## 📋 训练计划模板亮点
 
 <details open>
@@ -221,6 +316,8 @@ python Lzheng-fitness/tools/install.py --platform codex --all
 
 </details>
 
+---
+
 ## 📁 项目结构
 
 <details>
@@ -233,7 +330,7 @@ python Lzheng-fitness/tools/install.py --platform codex --all
 ├── fitness_pkg/                     # 核心包（模型/动作库/解析器/弹窗/页面/AI教练页）
 ├── fitness_pkg/science.py           # 训练科学规则层（RPE/RIR、周组数、减载、停滞、缺口审计）
 ├── ai_coach_engine.py               # AI 教练引擎（P0-L3/周期/复盘/接回/短版 + 规则层）
-├── tests/                           # smoke_check.py 冒烟 + 91 项单元测试（缺 GUI 依赖自动跳过）
+├── tests/                           # smoke_check.py 冒烟 + pytest 用例（缺 GUI 依赖自动跳过）
 ├── cairn/                           # ROADMAP 与开发日志（NPC 自动开发排期事实源）
 ├── 健身监控v9.0.spec                 # PyInstaller 主打包配置（正式版）
 ├── 健身监控_debug.spec               # 调试打包配置（带控制台，便于排查启动异常）
@@ -267,12 +364,14 @@ python Lzheng-fitness/tools/install.py --platform codex --all
 # 冒烟: py_compile 全部核心模块 + 规则层断言 + 引擎端到端 + 4 项口径不变量
 python tests/smoke_check.py
 
-# 单元测试 (91 项): RPE/RIR、e1RM 互逆、周组数、周期/减载、安全分流、复盘、接回、短版
-python -m unittest discover -s tests
+# 单元测试: RPE/RIR、e1RM 互逆、周组数、周期/减载、安全分流、复盘、接回、短版
+python -m pytest tests
+python -m unittest discover -s tests   # 与上同源, 不装 pytest 时可用
 ```
 
+> 规则层口径已收敛到 `fitness_pkg/science.py` 单一来源, 引擎与 GUI 都通过它下判, 避免两套逻辑打架。
 > GUI 相关改动无法在无显示器环境验证，建议在本地 Windows 打开界面确认一次（见 `cairn/ROADMAP.md` 开放问题）。
-> `tests/test_fitness_pkg.py` 需要 PySide6 / numpy / pandas，缺少依赖时自动跳过。
+> 缺 PySide6 / numpy / pandas 时相关用例自动跳过。
 
 ## 📊 数据说明
 
@@ -287,6 +386,8 @@ python -m unittest discover -s tests
 
 </details>
 
+---
+
 ## ⚠️ 注意事项
 
 - 本项目为个人健身工具，数据存储在本地
@@ -296,6 +397,8 @@ python -m unittest discover -s tests
 - AI 教练提供一般训练规划支持，不作医疗诊断或康复建议
 - 所有负荷与 1RM 数字都是**估算起点**，请以实际表现的 RPE 反馈为准，不要用公式替代记录
 - 空腹有氧、HIIT、断食等策略不通过“惩罚性有氧”执行；时间不足时优先减附件而不是压缩主项休息
+
+---
 
 ## 📄 许可证
 

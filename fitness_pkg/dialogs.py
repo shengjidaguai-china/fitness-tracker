@@ -1,19 +1,27 @@
-# -*- coding: utf-8 -*-
 """
 动作详情弹窗 (v7.0 模块化拆分)
 ExerciseDetailDialog: QMovie 播放 GIF + 循环控制 + 速度选择 + 自适应缩放
 """
+
 from typing import Dict
 
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QDialog, QLabel, QVBoxLayout, QHBoxLayout, QFrame,
-    QScrollArea, QWidget, QPushButton, QSizePolicy,
+    QDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
 )
 
-from .constants import COLORS
+from .constants import COLORS, button_style, player_panel_style, player_text_style
 from .exercise_lib import ExerciseLibrary
+from .shell import apply_surface
 
 
 class ExerciseDetailDialog(QDialog):
@@ -29,29 +37,30 @@ class ExerciseDetailDialog(QDialog):
         self._build_ui()
 
     def _build_ui(self):
-        name = self.exercise.get('name_cn', '未知动作')
-        self.setWindowTitle(f'动作示范 — {name}')
+        name = self.exercise.get("name_cn", "未知动作")
+        self.setWindowTitle(f"动作示范 — {name}")
         self.setMinimumSize(780, 620)
         self.setStyleSheet(f"background-color: {COLORS['bg']}; color: {COLORS['text']};")
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(10)
 
-        # 标题
-        title = QLabel(f'  {name}')
-        title.setFont(QFont('Microsoft YaHei', 18, QFont.Bold))
-        title.setStyleSheet(f"color: {COLORS['primary']}; padding: 8px 10px;")
+        title = QLabel(name)
+        title.setFont(QFont("Microsoft YaHei", 18, QFont.Bold))
+        title.setStyleSheet(f"color: {COLORS['text']}; padding: 2px 0;")
         layout.addWidget(title)
 
         # 英文名 + 器材
-        en_name = self.exercise.get('name_en', '')
-        equip = self.exercise.get('equipment', '')
-        target = self.exercise.get('target', '')
-        info_parts = [f'English: {en_name}'] if en_name else []
+        en_name = self.exercise.get("name_en", "")
+        equip = self.exercise.get("equipment", "")
+        target = self.exercise.get("target", "")
+        info_parts = [f"English: {en_name}"] if en_name else []
         if equip:
-            info_parts.append(f'器材: {equip}')
+            info_parts.append(f"器材: {equip}")
         if target:
-            info_parts.append(f'目标: {target}')
-        info = QLabel('    |    '.join(info_parts))
+            info_parts.append(f"目标: {target}")
+        info = QLabel("    |    ".join(info_parts))
         info.setStyleSheet(f"color: {COLORS['subtext']}; padding: 0 10px; font-size: 11px;")
         layout.addWidget(info)
 
@@ -59,57 +68,52 @@ class ExerciseDetailDialog(QDialog):
         body = QHBoxLayout()
         body.setSpacing(12)
 
-        # 左侧GIF区域
+        # 左侧GIF区域 — 深色"播放器画框"
         gif_frame = QFrame()
-        gif_frame.setStyleSheet(
-            f"background-color: {COLORS['card']}; border-radius: 10px; "
-            f"border: 1px solid {COLORS['border']};"
-        )
+        gif_frame.setStyleSheet(player_panel_style())
         gif_frame.setMinimumSize(340, 340)
         gif_layout = QVBoxLayout(gif_frame)
-        gif_layout.setContentsMargins(8, 8, 8, 8)
+        gif_layout.setContentsMargins(10, 10, 10, 6)
+        gif_layout.setSpacing(6)
 
         self.gif_label = QLabel()
         self.gif_label.setAlignment(Qt.AlignCenter)
         self.gif_label.setMinimumSize(320, 280)
         self.gif_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.gif_label.setStyleSheet(
-            f"background-color: transparent; color: {COLORS['subtext']}; font-size: 13px;"
-        )
+        self.gif_label.setStyleSheet(player_text_style(font_size=13))
         gif_layout.addWidget(self.gif_label)
 
         # 帧信息标签
-        self.frame_info = QLabel('')
+        self.frame_info = QLabel("")
         self.frame_info.setAlignment(Qt.AlignCenter)
-        self.frame_info.setStyleSheet(f"color: {COLORS['subtext']}; font-size: 9px;")
+        self.frame_info.setStyleSheet(player_text_style(font_size=9))
         gif_layout.addWidget(self.frame_info)
 
         body.addWidget(gif_frame, stretch=4)
 
         # 右侧信息面板
         info_frame = QFrame()
-        info_frame.setStyleSheet(f"background-color: {COLORS['card']}; border-radius: 10px;")
+        apply_surface(info_frame)
         info_layout = QVBoxLayout(info_frame)
-        info_layout.setContentsMargins(12, 12, 12, 12)
+        info_layout.setContentsMargins(16, 14, 16, 14)
         info_layout.setSpacing(6)
 
-        # 肌群信息
-        muscle = self.exercise.get('muscle_group', '')
-        secondary = self.exercise.get('secondary_muscles', [])
-        sec_str = ', '.join(secondary) if isinstance(secondary, list) else str(secondary)
+        muscle = self.exercise.get("muscle_group", "")
+        secondary = self.exercise.get("secondary_muscles", [])
+        sec_str = ", ".join(secondary) if isinstance(secondary, list) else str(secondary)
 
-        musc_title = QLabel('肌群信息')
-        musc_title.setFont(QFont('Microsoft YaHei', 12, QFont.Bold))
-        musc_title.setStyleSheet(f"color: {COLORS['primary']};")
+        musc_title = QLabel("肌群信息")
+        musc_title.setFont(QFont("Microsoft YaHei", 12, QFont.Bold))
+        musc_title.setStyleSheet(f"color: {COLORS['text']}; background: transparent;")
         info_layout.addWidget(musc_title)
 
         for label, value, color in [
-            ('主肌群', muscle, COLORS['success']),
-            ('协同肌群', sec_str, COLORS['warning']),
+            ("主肌群", muscle, COLORS["success"]),
+            ("协同肌群", sec_str, COLORS["warning"]),
         ]:
             if value:
-                row = QLabel(f'{label}: {value}')
-                row.setFont(QFont('Microsoft YaHei', 10))
+                row = QLabel(f"{label}: {value}")
+                row.setFont(QFont("Microsoft YaHei", 10))
                 row.setStyleSheet(f"color: {color}; padding: 2px 4px;")
                 row.setWordWrap(True)
                 info_layout.addWidget(row)
@@ -121,29 +125,27 @@ class ExerciseDetailDialog(QDialog):
         info_layout.addWidget(sep1)
 
         # 步骤标题
-        steps_title = QLabel('动作步骤')
-        steps_title.setFont(QFont('Microsoft YaHei', 12, QFont.Bold))
+        steps_title = QLabel("动作步骤")
+        steps_title.setFont(QFont("Microsoft YaHei", 12, QFont.Bold))
         steps_title.setStyleSheet(f"color: {COLORS['purple']};")
         info_layout.addWidget(steps_title)
 
         # 步骤列表
-        steps = self.exercise.get('instruction_steps_zh', [])
+        steps = self.exercise.get("instruction_steps_zh", [])
         if not steps:
-            instructions = self.exercise.get('instructions_zh', '')
+            instructions = self.exercise.get("instructions_zh", "")
             if instructions:
-                steps = [s.strip() for s in instructions.replace('\n', '。').split('。') if s.strip()]
+                steps = [s.strip() for s in instructions.replace("\n", "。").split("。") if s.strip()]
 
         step_scroll = QScrollArea()
         step_scroll.setWidgetResizable(True)
-        step_scroll.setStyleSheet(
-            "QScrollArea {{ border: none; background-color: transparent; }}"
-        )
+        step_scroll.setStyleSheet("QScrollArea {{ border: none; background-color: transparent; }}")
         step_widget = QWidget()
         step_layout = QVBoxLayout(step_widget)
         step_layout.setSpacing(4)
         step_layout.setContentsMargins(0, 0, 0, 0)
         for i, step in enumerate(steps, 1):
-            sl = QLabel(f'{i}. {step}')
+            sl = QLabel(f"{i}. {step}")
             sl.setWordWrap(True)
             sl.setStyleSheet(f"color: {COLORS['text']}; padding: 2px 4px; font-size: 10px;")
             step_layout.addWidget(sl)
@@ -159,49 +161,43 @@ class ExerciseDetailDialog(QDialog):
         ctrl.setSpacing(8)
 
         # 播放/暂停
-        self.btn_play = QPushButton('暂停')
-        self.btn_play.setFixedHeight(28)
+        self.btn_play = QPushButton("暂停")
+        self.btn_play.setFixedHeight(32)
         self.btn_play.clicked.connect(self._toggle_play)
-        self.btn_play.setStyleSheet(self._ctrl_btn_style(COLORS['primary']))
+        self.btn_play.setStyleSheet(button_style(COLORS["primary"], padding="6px 22px", font_size=12))
         ctrl.addWidget(self.btn_play)
 
         # 重新播放
-        btn_restart = QPushButton('重播')
-        btn_restart.setFixedHeight(28)
+        btn_restart = QPushButton("重播")
+        btn_restart.setFixedHeight(32)
         btn_restart.clicked.connect(self._restart)
-        btn_restart.setStyleSheet(self._ctrl_btn_style(COLORS['success']))
+        btn_restart.setStyleSheet(button_style(COLORS["success"], padding="6px 22px", font_size=12))
         ctrl.addWidget(btn_restart)
 
         ctrl.addSpacing(16)
 
         # 速度控制标签
-        speed_label = QLabel('速度:')
+        speed_label = QLabel("速度:")
         speed_label.setStyleSheet(f"color: {COLORS['subtext']}; font-size: 10px;")
         ctrl.addWidget(speed_label)
 
-        for pct, lbl in [(50, '0.5x'), (75, '0.75x'), (100, '1x'), (150, '1.5x'), (200, '2x')]:
+        for pct, lbl in [(50, "0.5x"), (75, "0.75x"), (100, "1x"), (150, "1.5x"), (200, "2x")]:
             btn = QPushButton(lbl)
-            btn.setFixedHeight(26)
-            btn.setFixedWidth(42)
-            active = (pct == 100)
+            btn.setFixedHeight(28)
+            btn.setFixedWidth(44)
+            active = pct == 100
             btn.setCheckable(True)
             btn.setChecked(active)
             btn.clicked.connect(lambda checked, s=pct, b=btn: self._set_speed(s, b))
-            btn.setStyleSheet(
-                f"QPushButton {{ background-color: {'#2ea043' if active else COLORS['card']}; "
-                f"color: {'#fff' if active else COLORS['text']}; border: 1px solid {COLORS['border']}; "
-                f"border-radius: 3px; padding: 2px 4px; font-size: 9px; }}"
-                f"QPushButton:checked {{ background-color: #2ea043; color: #fff; }}"
-                f"QPushButton:hover {{ border: 1px solid {COLORS['primary']}; }}"
-            )
-            btn.setProperty('speed_btn', True)
+            btn.setStyleSheet(self._speed_btn_style(active))
+            btn.setProperty("speed_btn", True)
             self._speed_buttons.append(btn)
             ctrl.addWidget(btn)
 
         ctrl.addStretch()
 
         # 帧计数
-        self.lbl_frame_count = QLabel('')
+        self.lbl_frame_count = QLabel("")
         self.lbl_frame_count.setStyleSheet(f"color: {COLORS['subtext']}; font-size: 9px;")
         ctrl.addWidget(self.lbl_frame_count)
 
@@ -210,35 +206,42 @@ class ExerciseDetailDialog(QDialog):
         self._load_gif()
 
     @staticmethod
-    def _ctrl_btn_style(color: str) -> str:
-        return (
-            f"QPushButton {{ background-color: {COLORS['card']}; color: {COLORS['text']}; "
-            f"border: 1px solid {COLORS['border']}; border-radius: 4px; "
-            f"padding: 4px 12px; font-size: 11px; }}"
-            f"QPushButton:hover {{ border: 1px solid {color}; }}"
-        )
+    def _speed_btn_style(active: bool) -> str:
+        """倍速小按钮 — 选中绿色实心 / 未选白底描边"""
+        if active:
+            return f"""
+                QPushButton {{ background-color: {COLORS["success"]}; color: {COLORS["appbar_text"]};
+                              border: 1px solid {COLORS["success"]}; border-radius: 6px;
+                              padding: 3px 8px; font-size: 10px; font-weight: 700; }}
+                QPushButton:hover {{ background-color: {COLORS["success_dark"]}; }}
+            """
+        return f"""
+            QPushButton {{ background-color: {COLORS["card"]}; color: {COLORS["text"]};
+                          border: 1px solid {COLORS["border"]}; border-radius: 6px;
+                          padding: 3px 8px; font-size: 10px; font-weight: 600; }}
+            QPushButton:hover {{ background-color: {COLORS["success_soft"]};
+                                border-color: {COLORS["success"]}; }}
+            QPushButton:checked {{ background-color: {COLORS["success"]}; color: {COLORS["appbar_text"]};
+                                   border-color: {COLORS["success"]}; }}
+        """
 
     def _load_gif(self):
         """加载GIF动画 — 带错误恢复和帧缓存"""
-        media_id = self.exercise.get('media_id', '')
+        media_id = self.exercise.get("media_id", "")
         gif_path = self.lib.gif_path(media_id)
         if gif_path is None:
-            self.gif_label.setText(
-                '无动作示范GIF\n\n(该动作未匹配到示范数据)'
-            )
-            self.gif_label.setStyleSheet(
-                f"background-color: {COLORS['card']}; color: {COLORS['subtext']}; "
-                f"font-size: 13px; border-radius: 8px; padding: 20px;"
-            )
+            self.gif_label.setText("无动作示范GIF\n\n(该动作未匹配到示范数据)")
+            self.gif_label.setStyleSheet(player_text_style(font_size=13, padding="20px"))
             self.btn_play.setEnabled(False)
-            self.lbl_frame_count.setText('')
+            self.lbl_frame_count.setText("")
             return
 
         from PySide6.QtGui import QMovie
+
         try:
             self.movie = QMovie(gif_path)
             if not self.movie.isValid():
-                raise ValueError('无效GIF文件')
+                raise ValueError("无效GIF文件")
 
             # 缓存所有帧以提高播放流畅度
             self.movie.setCacheMode(QMovie.CacheAll)
@@ -255,21 +258,14 @@ class ExerciseDetailDialog(QDialog):
             self.movie.start()
 
             total = self.movie.frameCount()
-            self.lbl_frame_count.setText(f'共 {total} 帧')
-            self.frame_info.setText(
-                f'分辨率: {gif_size.width()}x{gif_size.height()}'
-            )
+            self.lbl_frame_count.setText(f"共 {total} 帧")
+            self.frame_info.setText(f"分辨率: {gif_size.width()}x{gif_size.height()}")
 
         except Exception as e:
-            self.gif_label.setText(
-                f'GIF加载失败\n\n(文件可能已损坏)\n\n{str(e)[:80]}'
-            )
-            self.gif_label.setStyleSheet(
-                f"background-color: {COLORS['card']}; color: {COLORS['danger']}; "
-                f"font-size: 11px; border-radius: 8px; padding: 20px;"
-            )
+            self.gif_label.setText(f"GIF加载失败\n\n(文件可能已损坏)\n\n{str(e)[:80]}")
+            self.gif_label.setStyleSheet(player_text_style(error=True, font_size=11, padding="20px"))
             self.btn_play.setEnabled(False)
-            self.lbl_frame_count.setText('')
+            self.lbl_frame_count.setText("")
             if self.movie:
                 self.movie = None
 
@@ -277,7 +273,7 @@ class ExerciseDetailDialog(QDialog):
         if self.movie:
             total = self.movie.frameCount()
             if total > 0:
-                self.frame_info.setText(f'帧: {frame + 1}/{total}')
+                self.frame_info.setText(f"帧: {frame + 1}/{total}")
 
     def _on_loop_complete(self):
         """循环结束自动重播"""
@@ -286,21 +282,23 @@ class ExerciseDetailDialog(QDialog):
 
     def _on_state_changed(self, state):
         from PySide6.QtGui import QMovie
+
         if state == QMovie.Running:
-            self.btn_play.setText('暂停')
+            self.btn_play.setText("暂停")
         elif state == QMovie.NotRunning:
-            self.btn_play.setText('播放')
+            self.btn_play.setText("播放")
 
     def _toggle_play(self):
         if self.movie is None:
             return
         from PySide6.QtGui import QMovie
+
         if self.movie.state() == QMovie.Running:
             self.movie.setPaused(True)
-            self.btn_play.setText('播放')
+            self.btn_play.setText("播放")
         else:
             self.movie.setPaused(False)
-            self.btn_play.setText('暂停')
+            self.btn_play.setText("暂停")
 
     def _restart(self):
         if self.movie is None:
@@ -316,17 +314,11 @@ class ExerciseDetailDialog(QDialog):
         self.movie.setSpeed(pct)
         # 更新速度按钮高亮: 仅当前选中的为绿色
         for b in self._speed_buttons:
-            active = (b is btn)
+            active = b is btn
             b.setChecked(active)
-            b.setStyleSheet(
-                f"QPushButton {{ background-color: {'#2ea043' if active else COLORS['card']}; "
-                f"color: {'#fff' if active else COLORS['text']}; border: 1px solid {COLORS['border']}; "
-                f"border-radius: 3px; padding: 2px 4px; font-size: 9px; }}"
-                f"QPushButton:checked {{ background-color: #2ea043; color: #fff; }}"
-                f"QPushButton:hover {{ border: 1px solid {COLORS['primary']}; }}"
-            )
+            b.setStyleSheet(self._speed_btn_style(active))
         if pct != 100 and self.movie:
-            self.frame_info.setText(f'速度: {pct / 100:.2f}x')
+            self.frame_info.setText(f"速度: {pct / 100:.2f}x")
 
     def closeEvent(self, event):
         """关闭窗口时清理QMovie资源"""
