@@ -12,6 +12,7 @@ from ai_coach_engine import (
     calc_target_weight,
     determine_cycle_length,
     distribute_phases,
+    e1rm_from_set,
     estimate_1rm,
     generate_strength_cycle,
     review_training,
@@ -23,13 +24,16 @@ class TestEstimate:
         assert estimate_1rm(100.0, 1) == pytest.approx(100.0)
 
     def test_epley_formula(self):
-        # Epley: W × (1 + reps/30)
-        assert estimate_1rm(100.0, 5) == pytest.approx(100.0 * (1 + 5 / 30.0))
+        # v9.1 口径: RPE 7 → 3 RIR, 先折算到力竭等效重量再套 Epley
+        # e1RM = 100 / (1 + 3 × RIR_LOAD_STEP) × (1 + (5+3)/30) ≈ 117.83
+        assert estimate_1rm(100.0, 5) == pytest.approx(e1rm_from_set(100.0, 5, 7.0))
+        assert estimate_1rm(100.0, 5) == pytest.approx(117.83)
 
-    def test_rpe_above_seven_raises_estimate(self):
-        low = estimate_1rm(100.0, 5, rpe=7.0)
-        high = estimate_1rm(100.0, 5, rpe=9.0)
-        assert high > low
+    def test_lower_rpe_higher_estimate(self):
+        # v9.1: 同样 5 次, RPE 越低 (RIR 越多) 代表当天真实 1RM 越高
+        low_effort = estimate_1rm(100.0, 5, rpe=7.0)
+        high_effort = estimate_1rm(100.0, 5, rpe=9.0)
+        assert low_effort > high_effort
 
     def test_calc_target_weight_rounds_to_half_kilo(self):
         # 0.5kg 精度
@@ -152,38 +156,46 @@ class TestReview:
         assert r.judgment == "部分完成"
         assert r.progression_type == "维持"
 
-    def test_too_heavy_rpe(self):
+    def test_overload_downgrades_weight(self):
+        # v9.1: RPE ≥9.5 或比目标少 ≥2 次 → 直接降约 5% 保住动作质量
         r = review_training(self._log(rpe=9.8))
-        assert r.judgment == "偏重"
-        assert r.progression_type == "维持"
-        assert r.next_prescription["rpe"] == pytest.approx(9.3)
+        assert r.judgment == "合适"
+        assert r.progression_type == "线性/波浪"  # 深蹲为复合主项
+        assert r.next_prescription["weight"] == pytest.approx(95.0)
 
-    def test_light_add_reps_first(self):
+    def test_far_below_target_downgrades(self):
+        # v9.1: 比目标少 ≥2 次 → 按表现降级, 而非旧版的"偏轻加次"
         r = review_training(self._log(rpe=6.0, reps=5))
-        assert r.judgment == "偏轻"
-        assert r.progression_type == "加次"
-        assert r.next_prescription["reps"] == 6
+        assert r.judgment == "合适"
+        assert r.progression_type == "线性/波浪"
+        assert r.next_prescription["weight"] == pytest.approx(95.0)
 
-    def test_light_and_reps_capped_add_weight(self):
+    def test_beat_target_with_low_rpe_adds_weight(self):
+        # v9.1: 达到目标次数且 RPE 低于目标半档以上 → 上调一个最小重量档 (100kg 档位 → +5kg)
         r = review_training(self._log(rpe=6.0, reps=12))
-        assert r.progression_type == "加重"
-        assert r.next_prescription["weight"] == pytest.approx(102.5)
+        assert r.judgment == "偏轻"
+        assert r.progression_type == "线性/波浪"
+        assert r.next_prescription["weight"] == pytest.approx(105.0)
 
-    def test_same_weight_reps_rpe_drop_triggers_load(self):
+    def test_rpe_drop_with_same_load_downgrades(self):
+        # v9.1: 次数仍远低于目标 (5/10) → 降约 5%, 不因 RPE 下降而直接加重
         prev = self._log(rpe=8.5)
         r = review_training(self._log(weight=100.0, reps=5, rpe=8.0), prev_log=prev)
-        assert r.progression_type == "加重"
-        assert r.next_prescription["weight"] == pytest.approx(102.5)
+        assert r.progression_type == "线性/波浪"
+        assert r.next_prescription["weight"] == pytest.approx(95.0)
 
-    def test_same_weight_reps_stable_keeps(self):
+    def test_below_target_suggests_downgrade(self):
+        # v9.1: 与上次同负荷同次数但仍低于目标次数 → 折算降级, 先补齐次数缺口
         prev = self._log(rpe=8.0)
         r = review_training(self._log(weight=100.0, reps=5, rpe=8.0), prev_log=prev)
-        assert r.progression_type == "维持"
+        assert r.progression_type == "线性/波浪"
+        assert r.next_prescription["weight"] == pytest.approx(95.0)
 
-    def test_mid_range_adds_reps(self):
+    def test_mid_range_below_target_downgrades(self):
+        # v9.1: RPE 7.5 但比目标少 5 次 → 降级分支, 由复合主项线性/波浪推进
         r = review_training(self._log(rpe=7.5, reps=5))
-        assert r.progression_type == "加次"
-        assert r.next_prescription["reps"] == 6
+        assert r.progression_type == "线性/波浪"
+        assert r.next_prescription["weight"] == pytest.approx(95.0)
 
     def test_result_shape(self):
         r = review_training(self._log())
