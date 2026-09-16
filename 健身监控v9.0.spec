@@ -3,7 +3,7 @@ import os
 from PyInstaller.utils.hooks import collect_submodules
 
 HERE = os.path.abspath('.')
-hiddenimports = ['ai_coach_engine', 'fitness_modules', 'fitness_pkg']
+hiddenimports = ['ai_coach_engine', 'fitness_modules', 'fitness_pkg', 'fitness_pkg.science']
 hiddenimports += collect_submodules('PySide6.QtSvg')
 hiddenimports += collect_submodules('PySide6.QtSvgWidgets')
 
@@ -44,6 +44,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='fitness_icon.ico',
 )
 coll = COLLECT(
     exe,
