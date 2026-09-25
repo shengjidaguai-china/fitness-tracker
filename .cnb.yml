@@ -24,6 +24,76 @@ $:
         - name: npc go
           type: npc:go
 
+  tag_push:
+    - name: windows-exe-release
+      runner:
+        namespace: group
+        tags:
+          - windows
+          - win-x64
+      env:
+        # 打包脚本/构建页面展示的名称 (workdir 由平台自动设为仓库根目录)
+        APP_NAME: 健身监控
+      stages:
+        # ---- 1. 打包 exe 并压缩 ----
+        - name: build-exe
+          script: |
+            $ErrorActionPreference = "Stop"
+
+            Write-Host "=== 环境自检 ==="
+            cmd /c ver
+            python --version
+            git --version
+
+            Write-Host "=== 安装打包依赖 ==="
+            python -m pip install --upgrade pip
+            python -m pip install -r requirements-build.txt
+
+            Write-Host "=== PyInstaller 打包 (onedir, 含图标与资源) ==="
+            # 使用仓库内既有 spec: 与本地打包产物一致, 避免两套参数漂移
+            python -m PyInstaller 健身监控v9.0.spec --noconfirm --clean
+
+            $exe = Join-Path $PWD "dist\健身监控v9.0\健身监控v9.0.exe"
+            if (-not (Test-Path $exe)) {
+              Write-Error "[FAIL] 未生成 exe: $exe"
+              exit 1
+            }
+
+            $zip = Join-Path $PWD "$env:APP_NAME-$env:CNB_BRANCH-windows-x64.zip"
+            if (Test-Path $zip) { Remove-Item $zip -Force }
+            Write-Host "=== 归档: $zip ==="
+            Compress-Archive -Path "dist\健身监控v9.0\*" -DestinationPath $zip -CompressionLevel Optimal
+
+            $zipMB = [math]::Round((Get-Item $zip).Length / 1MB, 1)
+            $exeMB = [math]::Round((Get-Item $exe).Length / 1MB, 1)
+            Write-Host "[OK] tag=$env:CNB_BRANCH commit=$env:CNB_COMMIT_SHORT"
+            Write-Host "[OK] exe=$exeMB MB, zip=$zipMB MB"
+
+        # ---- 2. 发布 Release (tag_push 事件无需指定 tag, 自动取当前 tag) ----
+        - name: create-release
+          type: git:release
+          options:
+            title: $CNB_BRANCH
+            description: |
+              Windows 免安装版由 CNB 流水线自动构建。
+
+              下载 Release 附件 `$CNB_BRANCH-windows-x64.zip` → 解压 → 双击 `健身监控v9.0.exe` 运行（无需安装 Python）。
+            latest: true
+
+        # ---- 3. 把 zip 上传为该 Release 的附件 (页面内直接下载) ----
+        - name: upload-release-asset
+          image: cnbcool/attachments:latest
+          settings:
+            attachments:
+              - "./健身监控-*.zip"
+            ttl: 0
+
+        # ---- 4. 产出归档报告 (zip 可在构建页面下载留档) ----
+        - name: report-artifact
+          script: |
+            Get-ChildItem -Filter "健身监控-*.zip" | Select-Object Name, @{n="MB";e={[math]::Round($_.Length/1MB,1)}} | Format-Table -AutoSize
+            Write-Host "[DONE] Release: https://cnb.cool/$env:CNB_REPO_SLUG/-/releases"
+
 # ---------- 自动接管: 每工作日 21:00 定时推进 ROADMAP 排期 ----------
 # 时间可按需调整 (crontab 表达式)。cairn/ROADMAP.md 不存在时 NPC 自动回退读 README + Issues。
 main:
@@ -51,3 +121,23 @@ main:
             userPrompt: |
               执行今日排期推进: 读取 ROADMAP/README 定位下一个任务并完成,
               汇报改了什么、对应排期项、如何验证。
+
+# ---------- Windows Release: 推送 Tag 时自动打包 exe 并归档产物 ----------
+# 背景: 本应用是 PySide6 桌面 GUI, 只能在 Windows 上打包出可用的 exe,
+#       平台官方构建节点不提供 Windows, 所以这里调度到根组织自托管 Windows 构建机。
+#
+# 前置条件 (一次性, 由仓主/组织管理员完成):
+#   1. 根组织 / 组织设置 / 构建节点 → 新增 Runner, 平台选 Windows, 按「连接指引」在 Windows 机器上接入;
+#      runner-config.json 的 allowUseThisRunner.projects 需包含 yuppiez328/fitness-tracker,
+#      否则节点会被静默拒绝调度 (表现为「找不到可用节点」)。
+#   2. 节点标签需包含下面的 windows + win-x64 (节点标签为超集即可命中)。
+#      本仓没有符合标签的节点时, 流水线会直接失败——不会回退到 Linux 节点产出无效产物。
+#   3. 构建机需预装: Python 3.8+ (PATH 里是 python) + pip + git。
+#      依赖本身由流水线用 requirements-build.txt 安装, 无需手工预装 PySide6。
+#
+# 触发方式: 推送 tag 自动触发, 也可在构建页面手动触发本条流水线。
+# 产物归档: 步骤 1 把打包结果打成 zip; 步骤 2 发布 Release (页面可下载);
+#           步骤 3 由 attachments 插件把 zip 上传为该 Release 的附件;
+#           步骤 4 导出 zip 供构建页面下载/留档。
+#
+# 标签约定: 推送形如 v9.1 的 tag 即可; tag 名会写进产物文件名, 便于对应版本。

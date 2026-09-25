@@ -8,9 +8,9 @@
 
 *基于 Keep / Fitbod / Hevy / Strong 特性优化，深度集成 [Lzheng-fitness](https://github.com/yuppiez99999/Lzheng-fitness) 训练知识库*
 
-> 上游仓库：[GitHub · yuppiez99999/fitness-tracker](https://github.com/yuppiez99999/fitness-tracker)；本仓为 [CNB 镜像](https://cnb.cool/yuppiez328/fitness-tracker)（NPC 自动开发在这里跑）。
+> 上游仓库：[GitHub · yuppiez99999/fitness-tracker](https://github.com/yuppiez99999/fitness-tracker)；本仓为 [CNB 镜像](https://cnb.cool/yuppiez328/fitness-tracker)（NPC 自动开发在这里跑，Tag 触发流水线出 exe）。
 
-[![Version](https://img.shields.io/badge/version-v9.0%20%2B%20自动方案-ff6b35?style=flat-square&logo=github)](https://github.com/yuppiez99999/fitness-tracker)
+[![Version](https://img.shields.io/badge/version-v9.0%20%2B%20自动方案-ff6b35?style=flat-square&logo=github)](https://cnb.cool/yuppiez328/fitness-tracker/-/releases)
 [![Tests](https://img.shields.io/badge/tests-213%20passed%20%C2%B7%205%20skipped-3FB950?style=flat-square&logo=pytest&logoColor=white)](tests/)
 [![Code Style](https://img.shields.io/badge/code%20style-ruff-261230?style=flat-square&logo=ruff&logoColor=white)](https://github.com/astral-sh/ruff)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
@@ -19,8 +19,8 @@
 
 [![License](https://img.shields.io/badge/License-PolyForm%20NC%201.0.0-blue?style=flat-square)](#-许可证)
 [![Use](https://img.shields.io/badge/用途-非商业%20·%20须署名-red?style=flat-square)](#-许可证)
-[![Release](https://img.shields.io/github/v/release/yuppiez99999/fitness-tracker?style=flat-square&logo=github&label=release)](https://github.com/yuppiez99999/fitness-tracker/releases)
-[![Issues](https://img.shields.io/github/issues/yuppiez99999/fitness-tracker?style=flat-square&logo=github)](https://github.com/yuppiez99999/fitness-tracker/issues)
+[![Repo](https://img.shields.io/badge/repo-cnb.cool%2Fyuppiez328%2Ffitness--tracker-1f6feb?style=flat-square)](https://cnb.cool/yuppiez328/fitness-tracker)
+[![Issues](https://img.shields.io/badge/issues-问题反馈-8b5cf6?style=flat-square)](https://cnb.cool/yuppiez328/fitness-tracker/-/issues)
 
 **[功能亮点](#-功能亮点) · [界面预览](#-界面预览) · [自动方案](#-自动方案-输入驱动-v92-新增) · [AI 教练](#-ai-教练-v90-新增--v91-科学规则层) · [快速开始](#-快速开始) · [架构](#-技术架构) · [项目结构](#-项目结构) · [本地校验](#-本地校验) · [知识库](#-lzheng-fitness-知识库) · [许可证](#-许可证)**
 
@@ -220,14 +220,18 @@ flowchart LR
 
 ## 🚀 快速开始
 
-### 方式一 · 免安装运行（需先自行打包）
+### 方式一 · 免安装运行（下载 Releases 附件）
 
-> ⚠️ **当前仓库不含已编译的 exe，也不含 `dist/` 目录** —— 封装配置齐全，但产物需要在 **Windows 本机**生成
-> （PySide6 桌面程序无法跨平台打包，Qt 插件、`fitness_icon.ico` 与中文字体都是 Windows 资产）。
+> ⚠️ **仓库源码不提交 exe，也不提交 `dist/`**（已在 `.gitignore`）—— 产物由 **CNB 流水线在 Windows 构建机上生成**，
+> 或按下面「封装为独立 .exe」在 Windows 本机自行打包（PySide6 桌面程序无法跨平台打包）。
 
-1. 在 Windows 上按下面「封装为独立 .exe」跑一次 `python build_exe.py`
-2. 得到 `dist\健身监控v9.0\` 整个目录
-3. 把**整个目录**（不要只拷 exe）复制到任意 Windows 电脑，双击 `健身监控v9.0.exe` 即可运行
+1. 打开本仓 Releases：<https://cnb.cool/yuppiez328/fitness-tracker/-/releases>（若尚未推过 Tag，可能还没有附件）
+2. 找到对应版本的附件 `健身监控-<tag>-windows-x64.zip`，下载并解压（无需安装 Python）
+3. 复制到任意 Windows 电脑，双击 `健身监控v9.0.exe` 即可运行
+
+> 附件由 CNB 流水线在推送 Tag 时自动构建（`.cnb.yml` 的 `windows-exe-release`），
+> 与源码同源；本仓不再依赖 GitHub Releases。
+> **若 Releases 里还没有附件**，说明尚未推过 Tag，请按下文「封装为独立 .exe」在 Windows 本机打包一次。
 
 打包好的压缩包建议归档到本仓 Releases / 制品库，供免安装下载。
 
@@ -265,6 +269,10 @@ python -m PyInstaller 健身监控v9.0.spec --noconfirm --clean
 ```
 
 > 启动异常需要看报错时，改用 `健身监控_debug.spec`（保留控制台窗口，产物名 `健身监控v9.0_debug`）。
+>
+> **让流水线帮你打包**：改好代码后推一个 Tag（如 `git tag v9.1 && git push origin v9.1`），
+> CNB 的 `windows-exe-release` 流水线会在 Windows 构建机上自动打包，并把 `健身监控-<tag>-windows-x64.zip`
+> 上传到本仓 Releases 附件。本地依赖清单见 `requirements-build.txt`，与 CI 保持一致。
 
 | 打包入口 | 产物名 | 状态 |
 |:---------|:-------|:-----|
@@ -434,6 +442,7 @@ fitness-tracker/
 ├── 健身监控v9.0.spec                 # PyInstaller 主打包配置（正式版）
 ├── 健身监控_debug.spec               # 调试打包配置（带控制台，便于排查启动异常）
 ├── build_exe.py                     # 命令行一键打包脚本
+├── requirements-build.txt           # 打包依赖清单（本地与 CNB 流水线共用）
 ├── fitness_icon.ico                 # 应用图标
 ├── 启动体脂体重监控.bat             # Windows 一键启动脚本
 ├── Lzheng-fitness/                  # 知识库子模块（Schoenfeld/Helms 等 6 专家）
@@ -446,7 +455,7 @@ fitness-tracker/
 ├── docs/                            # 架构图产物（archify generated）
 ├── .venv/                           # 虚拟环境（不提交）
 ├── exercises-dataset/               # 动作数据集子模块（Git 子模块）
-├── dist/                            # 封装产物（.gitignore 排除，需本地打包生成）
+├── dist/                            # 封装产物（本地构建目录，.gitignore 排除，不提交）
 │   └── 健身监控v9.0/
 │       └── 健身监控v9.0.exe          # PyInstaller 产物（仓库不含，需本地 Windows 生成）
 ├── 体重体脂监控/                     # 训练计划与资源
@@ -574,7 +583,7 @@ Required Notice: Copyright (c) 2026 yuppiez99999 (https://github.com/yuppiez9999
 | 移除、隐藏或篡改署名行 `Required Notice` | ❌ | 违反 Notices 条款，许可证立即终止 |
 | 重新许可（sublicense）或转让本许可证 | ❌ | PolyForm NC 明确禁止 |
 
-> **商业授权**：如需将本软件用于商业用途，请通过 [Issues](https://github.com/yuppiez99999/fitness-tracker/issues) 联系作者另行签订商业许可协议。
+> **商业授权**：如需将本软件用于商业用途，请通过 [本仓 Issues](https://cnb.cool/yuppiez328/fitness-tracker/-/issues) 联系作者另行签订商业许可协议；上游项目见 [yuppiez99999/fitness-tracker](https://github.com/yuppiez99999/fitness-tracker)。
 
 ### 署名要求（必须）
 
@@ -634,7 +643,7 @@ PolyForm NC 1.0.0 中的"非商业"采用正向定义，**任何非商业目的�
   author       = {yuppiez99999},
   title        = {健身监控 v9.0：个人体脂体重监控与 AI 教练},
   year         = {2026},
-  url          = {https://github.com/yuppiez99999/fitness-tracker},
+  url          = {https://cnb.cool/yuppiez328/fitness-tracker},
   license      = {PolyForm Noncommercial 1.0.0}
 }
 ```
