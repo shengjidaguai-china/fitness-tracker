@@ -2,14 +2,16 @@
 
 <img src="fitness_icon.ico" alt="健身监控 Logo" width="120">
 
-# 健身监控 v9.1
+# 健身监控 v9.0
 
 **个人体脂体重监控 + 健身计划 + AI 教练**
 
 *基于 Keep / Fitbod / Hevy / Strong 特性优化，深度集成 [Lzheng-fitness](https://github.com/yuppiez99999/Lzheng-fitness) 训练知识库*
 
-[![Version](https://img.shields.io/badge/version-v9.1-ff6b35?style=flat-square&logo=github)](https://github.com/shengjidaguai-china/fitness-tracker/releases)
-[![Tests](https://img.shields.io/badge/tests-112%20passed-3FB950?style=flat-square&logo=pytest&logoColor=white)](tests/)
+> 上游仓库：[GitHub · yuppiez99999/fitness-tracker](https://github.com/yuppiez99999/fitness-tracker)；本仓为 [CNB 镜像](https://cnb.cool/yuppiez328/fitness-tracker)（NPC 自动开发在这里跑）。
+
+[![Version](https://img.shields.io/badge/version-v9.0%20%2B%20自动方案-ff6b35?style=flat-square&logo=github)](https://github.com/yuppiez99999/fitness-tracker)
+[![Tests](https://img.shields.io/badge/tests-213%20passed%20%C2%B7%205%20skipped-3FB950?style=flat-square&logo=pytest&logoColor=white)](tests/)
 [![Code Style](https://img.shields.io/badge/code%20style-ruff-261230?style=flat-square&logo=ruff&logoColor=white)](https://github.com/astral-sh/ruff)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white)](#-快速开始)
@@ -17,26 +19,31 @@
 
 [![License](https://img.shields.io/badge/License-PolyForm%20NC%201.0.0-blue?style=flat-square)](#-许可证)
 [![Use](https://img.shields.io/badge/用途-非商业%20·%20须署名-red?style=flat-square)](#-许可证)
-[![Stars](https://img.shields.io/github/stars/shengjidaguai-china/fitness-tracker?style=flat-square&logo=github)](https://github.com/shengjidaguai-china/fitness-tracker/stargazers)
-[![Issues](https://img.shields.io/github/issues/shengjidaguai-china/fitness-tracker?style=flat-square&logo=github)](https://github.com/shengjidaguai-china/fitness-tracker/issues)
+[![Release](https://img.shields.io/github/v/release/yuppiez99999/fitness-tracker?style=flat-square&logo=github&label=release)](https://github.com/yuppiez99999/fitness-tracker/releases)
+[![Issues](https://img.shields.io/github/issues/yuppiez99999/fitness-tracker?style=flat-square&logo=github)](https://github.com/yuppiez99999/fitness-tracker/issues)
 
-**[功能亮点](#-功能亮点) · [界面预览](#-界面预览) · [自动方案](#-自动方案-v92-新增) · [AI 教练](#-ai-教练-v90-新增--v91-科学规则层) · [快速开始](#-快速开始) · [架构](#-技术架构) · [知识库](#-lzheng-fitness-知识库) · [许可证](#-许可证)**
+**[功能亮点](#-功能亮点) · [界面预览](#-界面预览) · [自动方案](#-自动方案-输入驱动-v92-新增) · [AI 教练](#-ai-教练-v90-新增--v91-科学规则层) · [快速开始](#-快速开始) · [架构](#-技术架构) · [项目结构](#-项目结构) · [本地校验](#-本地校验) · [知识库](#-lzheng-fitness-知识库) · [许可证](#-许可证)**
 
 ---
 
 </div>
 
-> ### v9.2 关键升级
+> ### v9.2 关键升级 · 自动方案（输入驱动）
 > 新增**自动方案**（`fitness_pkg/auto_plan.py`，GUI 页「🧭 自动方案」+ CLI `auto_plan.py`）：
 >
 > **输入当前/目标体重体脂 → 训练计划 + 每日训练动作** · **输入月度伙食费预算 → 每日饮食计划 + 不伤身体的补剂方案**
 >
 > 速度上限（减脂 1% 体重/周、增肌 0.25%/周）与周组数区间全部走既有规则层；补剂只推荐常用安全品类并写明剂量上限与禁忌。
 >
-> ### v9.1 关键升级
+> ### v9.1 关键升级 · 训练科学规则层
 > 深度集成 Lzheng-fitness 知识库（Schoenfeld / Helms / Aragon / Nuckols 蒸馏模块），**AI 教练**引入全新**训练科学规则层**（`fitness_pkg/science.py`，49 项规则用例）：
 >
 > **RPE/RIR 统一口径** · **周组数 10–20 区间校验** · **反应式减载清单** · **停滞判定** · **48 小时接回** · **30/20/10/5/2 分钟短版**
+>
+> ### 关于版本号
+> 界面、打包配置与 `.cnb.yml` 中的程序名仍是 **v9.0**，`v9.1` / `v9.2` 指**持续迭代的功能层**
+> （规则层、计划视图、自动方案），并非另一个可执行文件版本。打包产物名统一为 `健身监控v9.0.exe`，
+> 以 `体脂体重监控_完整版.py`、`fitness_pkg/`、`ai_coach_engine.py` 的实际代码为准。
 >
 > 支持 PyInstaller 一键封装为独立 .exe，免安装 Python 直接运行。
 
@@ -48,7 +55,7 @@
 |:---|:---|
 | 📊 **体测仪表盘** | 12 项体测指标 · 快速录入 · 历史记录 |
 | 📈 **趋势分析** | 7 日 EMA 平滑曲线 · 目标达标日预测 · 体成分饼图 |
-| 🏋️ **动作示范库** | 51 个动作 GIF 动画 · 中文步骤教学 · 肌群信息 |
+| 🏋️ **动作示范库** | 66 个动作卡片 · 60 个 GIF 示范 · 中文步骤教学 · 肌群信息 |
 | 📅 **训练计划** | 22 周宽背窄腰塑形 v2.1（三阶段周期化，6 练 1 休）· 点击动作看示范 |
 | 🍽 **饮食与补剂** | 三阶段营养方案 · 五餐明细 · 补剂表 · 饮水指南 |
 | 🤖 **AI 教练** | 基于 Lzheng-fitness 知识库的增肌规划系统（5 个子功能 · 规则层带单元测试） |
@@ -63,7 +70,9 @@
   <img src="assets/screenshots/01_exercise_library.png" alt="动作示范库" width="95%">
 </p>
 
-> 66 个动作的网格卡片布局，支持按动作名 / 肌群 / 器材搜索，点击卡片即可查看 GIF 示范与详细步骤教学。
+> 66 个动作的网格卡片布局（其中 60 个带 GIF 示范），支持按动作名 / 肌群 / 器材搜索，点击卡片即可查看 GIF 与详细步骤教学。
+> 截图取自 `assets/screenshots/`（共 5 张，覆盖动作库 / 训练计划 / 饮食 / AI 教练）；**「自动方案」页暂无截图**，待本地 Windows 界面确认后补充。
+> 需要重新生成时，跑 `python _ui_shot.py`（离屏渲染，输出 `_shot_tab*.png`）。
 
 ---
 
@@ -101,7 +110,7 @@
 
 ---
 
-## 🧭 自动方案 (v9.2 新增)
+## 🧭 自动方案 · 输入驱动 (v9.2 新增)
 
 两条输入 → 两条输出，规则全部复用既有规则层，页面与 CLI 同源：
 
@@ -114,8 +123,24 @@
 # GUI: 左侧「🧭 自动方案」页, 填参数点「生成方案」
 # CLI: 不读写任何个人数据, 直接出 Markdown
 python auto_plan.py --weight 74 --bodyfat 23 --target-weight 68 --target-bodyfat 15 --budget 1500 --height 175
-python auto_plan.py --weight 74 --bodyfat 23 --target-bodyfat 15 --budget 1500 --out 方案.md
+python auto_plan.py --weight 74 --bodyfat 23 --target-bodyfat 15 --budget 1500 --out 方案.md   # 落成文件
 ```
+
+CLI 参数（`--weight` 必填，其余可选）：
+
+| 参数 | 说明 | 默认 |
+|:-----|:-----|:-----|
+| `--weight` | 当前体重 (kg)，必填 | — |
+| `--bodyfat` / `--target-bodyfat` | 当前 / 目标体脂率 (%) | 不填则按体重单指标推算 |
+| `--target-weight` | 目标体重 (kg) | 不填则按目标体脂推算 |
+| `--budget` | 月度伙食费预算 (元)；**不填则只出训练计划，跳过饮食与补剂** | — |
+| `--height` / `--age` / `--sex` | 身高 (cm) / 年龄 / 性别（`male` / `female`） | 影响 BMI、等级与起点负荷 |
+| `--training-age-months` | 训练年限（月） | `0`（按 P0 启动期处理） |
+| `--weeks` / `--week` | 计划周期（周）/ 当前第几周 | 按目标自动推算 / `1` |
+| `--out` | 写入指定 Markdown 文件 | 仅打印到终端 |
+
+> 实测（74kg / 23% → 68kg / 15%，预算 1500，训练年限 0）：识别为**减脂**方向、**P0 启动期**、每周 3 练全身分化，
+> 组数区间 6–10 组/肌群；每个动作给出「3×8-12 @RPE 6.0–7.0」，并附执行纪律（复合主项留 1–2 RIR、组间休息下限、就医触发条件）。
 
 **安全约束（写死在代码里, 不是文案）**
 
@@ -195,22 +220,25 @@ flowchart LR
 
 ## 🚀 快速开始
 
-### 方式一 · 免安装运行（推荐）
+### 方式一 · 免安装运行（需先自行打包）
 
-直接下载已封装的独立程序，无需安装 Python：
+> ⚠️ **当前仓库不含已编译的 exe，也不含 `dist/` 目录** —— 封装配置齐全，但产物需要在 **Windows 本机**生成
+> （PySide6 桌面程序无法跨平台打包，Qt 插件、`fitness_icon.ico` 与中文字体都是 Windows 资产）。
 
-1. 前往 [Releases](https://github.com/shengjidaguai-china/fitness-tracker/releases) 或克隆仓库获取 `dist\健身监控v9.0\` 目录
-2. 复制到任意 Windows 电脑
-3. 双击 `健身监控v9.0.exe` 即可运行
+1. 在 Windows 上按下面「封装为独立 .exe」跑一次 `python build_exe.py`
+2. 得到 `dist\健身监控v9.0\` 整个目录
+3. 把**整个目录**（不要只拷 exe）复制到任意 Windows 电脑，双击 `健身监控v9.0.exe` 即可运行
 
-### 方式二 · 源码运行
+打包好的压缩包建议归档到本仓 Releases / 制品库，供免安装下载。
+
+### 方式二 · 源码运行（推荐，开箱可用）
 
 - Python 3.8+
 - 建议使用虚拟环境运行，避免全局包冲突
 
 ```bash
 # 克隆仓库（含子模块）
-git clone --recurse-submodules https://github.com/shengjidaguai-china/fitness-tracker.git
+git clone --recurse-submodules https://cnb.cool/yuppiez328/fitness-tracker.git
 cd fitness-tracker
 
 # 创建虚拟环境
@@ -238,6 +266,15 @@ python -m PyInstaller 健身监控v9.0.spec --noconfirm --clean
 
 > 启动异常需要看报错时，改用 `健身监控_debug.spec`（保留控制台窗口，产物名 `健身监控v9.0_debug`）。
 
+| 打包入口 | 产物名 | 状态 |
+|:---------|:-------|:-----|
+| `build_exe.py` | `健身监控v9.0.exe` | ✅ **推荐**，已含图标 + 精简排除项 |
+| `健身监控v9.0.spec` | `健身监控v9.0.exe` | ✅ **维护中**，已补 `fitness_pkg.auto_plan` / `auto_plan_page` / `science` / `plan_science` 的 `hiddenimports` |
+| `健身监控_debug.spec` | `健身监控v9.0_debug.exe` | ✅ 保留控制台，用于排查启动异常 |
+| `健身监控.spec` | `健身监控v9.0.exe` | ⚠️ **旧版，未同步自动方案模块**，建议勿用（保留仅作参考） |
+
+> `dist/` 与 `build/` 已在 `.gitignore` 中，仓库不提交编译产物。
+
 ---
 
 ### 🛠️ 代码质量工程化（集成自 GitHub 开源工具）
@@ -248,7 +285,7 @@ python -m PyInstaller 健身监控v9.0.spec --noconfirm --clean
 |:-----|:------------|:-----|
 | **ruff** | [astral-sh/ruff](https://github.com/astral-sh/ruff) | 极速 Python lint + formatter（替代 flake8/black/isort） |
 | **pre-commit** | [pre-commit/pre-commit](https://github.com/pre-commit/pre-commit) | git 提交钩子，自动跑通用检查 + ruff |
-| **pytest** | [pytest-dev/pytest](https://github.com/pytest-dev/pytest) | 单元/构造冒烟测试（数据层/解析器/规则层/计划科学视图/AI 引擎），用例数由采集结果给出 |
+| **pytest** | [pytest-dev/pytest](https://github.com/pytest-dev/pytest) | 单元/构造冒烟测试（数据层/解析器/规则层/计划科学视图/AI 引擎/自动方案），实测 **213 passed · 5 skipped**（缺 PySide6 时**自动跳过** UI 用例） |
 
 ```bash
 # 一次性安装钩子（此后每次 git commit 自动检查）
@@ -270,23 +307,24 @@ python -m PyInstaller 健身监控v9.0.spec --noconfirm --clean
 
 ```mermaid
 flowchart TB
-    subgraph GUI["🖥 PySide6 桌面应用（6 Tab）"]
-        A1[📊 体测仪表盘] --- A2[📈 趋势分析]
-        A3[🏋️ 动作示范库] --- A4[📅 训练计划]
-        A5[🍽 饮食与补剂] --- A6[🤖 AI 教练]
+    subgraph GUI["🖥 PySide6 桌面应用（侧边栏 7 页）"]
+        A1[📊 仪表盘] --- A2[📈 趋势分析]
+        A3[🏋️ 动作库] --- A4[📅 训练计划]
+        A5[🍽 饮食与补剂] --- A6[🧭 自动方案]
+        A7[🤖 AI 教练<br>可选, 取决于依赖]
     end
     subgraph Core["⚙️ 核心模块"]
-        B1[fitness_pkg<br>模型/页面/解析器]
+        B1["fitness_pkg<br>模型/页面/解析器<br>science/plan_science/auto_plan"]
         B2[ai_coach_engine<br>P0-L3/周期/复盘/接回/短版]
         B3[tests<br>冒烟检查 + pytest 用例]
     end
     subgraph Data["💾 数据层"]
         C1[本地体测数据<br>12 项指标]
-        C2[exercises-dataset<br>51 动作 GIF]
+        C2[exercises-dataset<br>60 动作 GIF]
         C3[Lzheng-fitness<br>六专家知识库]
     end
     GUI --> Core --> Data
- ```
+```
 
 ### 📐 架构总览（archify 生成）
 
@@ -294,8 +332,11 @@ flowchart TB
   <img src="docs/fitness-arch.visual-check.1440x900.light.png" alt="健身监控 v9.0 架构总览" width="95%">
 </p>
 
-> 14 节点架构图：主入口 → 侧边栏壳层 → 6 个功能页面 → 4 个业务逻辑模块 → 本地数据 / AI 模型。
+> 架构图（`docs/` 下 archify 产物，标题与节点仍标 v9.0）：主入口 → 侧边栏壳层 → 功能页面 → 业务逻辑模块 → 本地数据 / 知识库。
 > 完整交互式架构图（支持主题切换 / 平移缩放 / 关系追踪）见 [`docs/fitness-arch.html`](docs/fitness-arch.html)（下载后本地打开）。
+>
+> 侧边栏实际有 **7 页**：仪表盘 / 趋势分析 / 动作库 / 训练计划 / 饮食与补剂 / 自动方案 / AI 教练；
+> 其中 **AI 教练页仅在依赖齐全时挂载**（`AI_COACH_AVAILABLE`），`docs/` 里的旧图未包含「自动方案」页。
 
 | 类别 | 技术 |
 |:-----|:-----|
@@ -378,8 +419,8 @@ python Lzheng-fitness/tools/install.py --platform codex --all
 <summary><b>展开目录树</b></summary>
 
 ```
-06_个人辅助工具/
-├── 体脂体重监控_完整版.py           # 主程序入口（PySide6 GUI，7 个 Tab）
+fitness-tracker/
+├── 体脂体重监控_完整版.py           # 主程序入口（PySide6 GUI，侧边栏 7 页）
 ├── fitness_modules.py               # 兼容层：re-export fitness_pkg（旧调用方无需改动）
 ├── fitness_pkg/                     # 核心包（模型/动作库/解析器/弹窗/页面/AI教练页）
 ├── fitness_pkg/science.py           # 训练科学规则层（RPE/RIR、周组数、减载、停滞、缺口审计）
@@ -398,16 +439,21 @@ python Lzheng-fitness/tools/install.py --platform codex --all
 ├── Lzheng-fitness/                  # 知识库子模块（Schoenfeld/Helms 等 6 专家）
 ├── generate_report.py               # 报告生成工具
 ├── 补全数据.py                       # 体测数据补全脚本
+├── _ui_shot.py                      # 离屏渲染页面截图（视觉验证用）
+├── .cnb.yml / .cnb/                 # CNB 双轨 NPC 流水线与仓库配置
+├── .pre-commit-config.yaml          # git 提交钩子（ruff + 通用检查）
+├── pyproject.toml                   # 依赖与 ruff / pytest 配置
+├── docs/                            # 架构图产物（archify generated）
 ├── .venv/                           # 虚拟环境（不提交）
 ├── exercises-dataset/               # 动作数据集子模块（Git 子模块）
-├── dist/                            # 封装产物（仅 exe 本体随仓库分发）
+├── dist/                            # 封装产物（.gitignore 排除，需本地打包生成）
 │   └── 健身监控v9.0/
-│       └── 健身监控v9.0.exe          # PyInstaller 封装的可执行程序
+│       └── 健身监控v9.0.exe          # PyInstaller 产物（仓库不含，需本地 Windows 生成）
 ├── 体重体脂监控/                     # 训练计划与资源
 │   ├── 训练计划文档（.md）            # 个人训练计划（本地个人数据，不提交）
 │   ├── ai_coach/                    # AI 教练数据（本地个人数据，不提交）
-│   ├── exercises_gif/               # 51 个动作示范 GIF
-│   ├── exercises_matched.json       # 动作与 GIF 映射
+│   ├── exercises_gif/               # 60 个动作示范 GIF
+│   ├── exercises_matched.json       # 66 个动作 与 GIF 映射
 │   ├── match_exercises.py           # 动作匹配脚本
 │   ├── 报告/                         # 体测报告 TXT（本地个人数据，不提交）
 │   └── 图表/                         # 趋势图 PNG（本地个人数据，不提交）
@@ -428,9 +474,23 @@ python auto_plan.py --weight 74 --bodyfat 23 --target-weight 68 --target-bodyfat
 # 单元测试: RPE/RIR、e1RM 互逆、周组数与区间判定、周期/减载、组次解析、安全分流、复盘、接回、短版、自动方案
 python -m pytest tests
 python -m unittest discover -s tests   # 与上同源, 不装 pytest 时可用
+
+# 代码风格（与 pre-commit 一致）
+python -m ruff check .
+python -m ruff format --check .
 ```
 
-> 规则层口径已收敛到 `fitness_pkg/science.py` 单一来源, 引擎、GUI 与 22 周计划视图 (`plan_science.py`) 都按它下判, 避免两套逻辑打架。
+当前实测（Python 3.11，无 PySide6）：
+
+| 命令 | 结果 |
+|:-----|:-----|
+| `python -m pytest tests` | **213 passed · 5 skipped** |
+| `python tests/smoke_check.py` | **4 组全过** |
+| `python -m ruff check .` / `ruff format --check .` | **全绿** |
+| `python auto_plan.py --weight 74 --bodyfat 23 --target-bodyfat 15 --budget 1500` | 正常输出 Markdown 方案 |
+
+> 规则层口径已收敛到 `fitness_pkg/science.py` 单一来源，引擎、GUI、自动方案 (`auto_plan.py`) 与 22 周计划视图 (`plan_science.py`) 都按它下判，避免两套逻辑打架。
+> 自动方案的周组数区间 / 速度上限 / 减载标注全部复用这套规则层，视图层不另算阈值。
 > GUI 相关改动无法在无显示器环境验证，建议在本地 Windows 打开界面确认一次（见 `cairn/ROADMAP.md` 开放问题）。
 > 缺 PySide6 / numpy / pandas 时相关用例自动跳过；`import fitness_pkg` 本身**不要求** PySide6，
 > 纯逻辑层（数据模型 / 解析器 / 规则层 / 计划科学视图）在 CI 与 CLI 里可直接用，
@@ -460,6 +520,9 @@ python -m unittest discover -s tests   # 与上同源, 不装 pytest 时可用
 - AI 教练提供一般训练规划支持，不作医疗诊断或康复建议
 - 所有负荷与 1RM 数字都是**估算起点**，请以实际表现的 RPE 反馈为准，不要用公式替代记录
 - 空腹有氧、HIIT、断食等策略不通过“惩罚性有氧”执行；时间不足时优先减附件而不是压缩主项休息
+- **版本号口径**：程序名统一为 v9.0，`v9.1` = 训练科学规则层，`v9.2` = 自动方案；不是三个独立可执行文件
+- **exe 未随仓库分发**：`dist/` 已被 `.gitignore` 排除，需要免安装版请在 Windows 本机跑一次 `build_exe.py`
+- **已知未完成项**：「自动方案」页的 GUI 布局仅在离屏环境验证过构造，需本地打开确认一次；减载周的饮食尚未随训练量联动（见 `cairn/ROADMAP.md` F12）
 
 ---
 
@@ -511,7 +574,7 @@ Required Notice: Copyright (c) 2026 yuppiez99999 (https://github.com/yuppiez9999
 | 移除、隐藏或篡改署名行 `Required Notice` | ❌ | 违反 Notices 条款，许可证立即终止 |
 | 重新许可（sublicense）或转让本许可证 | ❌ | PolyForm NC 明确禁止 |
 
-> **商业授权**：如需将本软件用于商业用途，请通过 [GitHub Issues](https://github.com/shengjidaguai-china/fitness-tracker/issues) 联系作者另行签订商业许可协议。
+> **商业授权**：如需将本软件用于商业用途，请通过 [Issues](https://github.com/yuppiez99999/fitness-tracker/issues) 联系作者另行签订商业许可协议。
 
 ### 署名要求（必须）
 
@@ -571,7 +634,7 @@ PolyForm NC 1.0.0 中的"非商业"采用正向定义，**任何非商业目的�
   author       = {yuppiez99999},
   title        = {健身监控 v9.0：个人体脂体重监控与 AI 教练},
   year         = {2026},
-  url          = {https://github.com/shengjidaguai-china/fitness-tracker},
+  url          = {https://github.com/yuppiez99999/fitness-tracker},
   license      = {PolyForm Noncommercial 1.0.0}
 }
 ```
