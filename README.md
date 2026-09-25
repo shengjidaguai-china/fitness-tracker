@@ -20,12 +20,19 @@
 [![Stars](https://img.shields.io/github/stars/shengjidaguai-china/fitness-tracker?style=flat-square&logo=github)](https://github.com/shengjidaguai-china/fitness-tracker/stargazers)
 [![Issues](https://img.shields.io/github/issues/shengjidaguai-china/fitness-tracker?style=flat-square&logo=github)](https://github.com/shengjidaguai-china/fitness-tracker/issues)
 
-**[功能亮点](#-功能亮点) · [界面预览](#-界面预览) · [AI 教练](#-ai-教练-v90-新增--v91-科学规则层) · [快速开始](#-快速开始) · [架构](#-技术架构) · [知识库](#-lzheng-fitness-知识库) · [许可证](#-许可证)**
+**[功能亮点](#-功能亮点) · [界面预览](#-界面预览) · [自动方案](#-自动方案-v92-新增) · [AI 教练](#-ai-教练-v90-新增--v91-科学规则层) · [快速开始](#-快速开始) · [架构](#-技术架构) · [知识库](#-lzheng-fitness-知识库) · [许可证](#-许可证)**
 
 ---
 
 </div>
 
+> ### v9.2 关键升级
+> 新增**自动方案**（`fitness_pkg/auto_plan.py`，GUI 页「🧭 自动方案」+ CLI `auto_plan.py`）：
+>
+> **输入当前/目标体重体脂 → 训练计划 + 每日训练动作** · **输入月度伙食费预算 → 每日饮食计划 + 不伤身体的补剂方案**
+>
+> 速度上限（减脂 1% 体重/周、增肌 0.25%/周）与周组数区间全部走既有规则层；补剂只推荐常用安全品类并写明剂量上限与禁忌。
+>
 > ### v9.1 关键升级
 > 深度集成 Lzheng-fitness 知识库（Schoenfeld / Helms / Aragon / Nuckols 蒸馏模块），**AI 教练**引入全新**训练科学规则层**（`fitness_pkg/science.py`，49 项规则用例）：
 >
@@ -45,6 +52,7 @@
 | 📅 **训练计划** | 22 周宽背窄腰塑形 v2.1（三阶段周期化，6 练 1 休）· 点击动作看示范 |
 | 🍽 **饮食与补剂** | 三阶段营养方案 · 五餐明细 · 补剂表 · 饮水指南 |
 | 🤖 **AI 教练** | 基于 Lzheng-fitness 知识库的增肌规划系统（5 个子功能 · 规则层带单元测试） |
+| 🧭 **自动方案** | 体测输入 → 训练计划与动作；预算输入 → 每日饮食与补剂（速度上限/组数区间/剂量上限均走规则层） |
 
 ---
 
@@ -90,6 +98,33 @@
 </p>
 
 > 基于 Lzheng-fitness 六位专家知识库的纯本地智能规划。建档后自动评估 P0-L3 训练阶段，生成个性化力量周期、训练复盘与停训接回方案。
+
+---
+
+## 🧭 自动方案 (v9.2 新增)
+
+两条输入 → 两条输出，规则全部复用既有规则层，页面与 CLI 同源：
+
+| 输入 | 输出 |
+|:-----|:-----|
+| 当前体重 / 体脂率 + 目标体重 / 体脂率（可选身高/年龄/性别/训练年限） | 训练计划：方向 + 周期周数 + P0–L3 等级 + 每周分化 + **每日动作的组×次×RPE** |
+| 月度伙食费预算 | 每日饮食计划：热量与三大宏量 + 六餐份量与采购参考 + 补剂清单（含剂量上限与禁忌） |
+
+```bash
+# GUI: 左侧「🧭 自动方案」页, 填参数点「生成方案」
+# CLI: 不读写任何个人数据, 直接出 Markdown
+python auto_plan.py --weight 74 --bodyfat 23 --target-weight 68 --target-bodyfat 15 --budget 1500 --height 175
+python auto_plan.py --weight 74 --bodyfat 23 --target-bodyfat 15 --budget 1500 --out 方案.md
+```
+
+**安全约束（写死在代码里, 不是文案）**
+
+- 减脂周速度上限 **1% 体重**、增肌 **0.25% 体重**；目标再激进也只会延长周期，不会加大缺口
+- 目标体脂触发但体重得动更多时，按「保住去脂体重」推算目标体重并提示差异
+- 体脂接近必需脂肪区间（男 ≤5% / 女 ≤12%）→ 提示不建议继续减脂，先做医学评估
+- 补剂只保留乳清/肌酸/维D3/鱼油/镁/锌这类常用安全品类，每项写明**剂量上限与禁忌**
+- 补剂占比不超过预算 15% 且不超过 25 元/天：钱先花在真食物上，蛋白缺口优先补齐
+- 补剂红线（燃脂丸、促生长类、利尿剂等）直接列为不碰项；有基础病/服药/孕期先问医生
 
 ---
 
@@ -344,11 +379,14 @@ python Lzheng-fitness/tools/install.py --platform codex --all
 
 ```
 06_个人辅助工具/
-├── 体脂体重监控_完整版.py           # 主程序入口（PySide6 GUI，6 个 Tab）
+├── 体脂体重监控_完整版.py           # 主程序入口（PySide6 GUI，7 个 Tab）
 ├── fitness_modules.py               # 兼容层：re-export fitness_pkg（旧调用方无需改动）
 ├── fitness_pkg/                     # 核心包（模型/动作库/解析器/弹窗/页面/AI教练页）
 ├── fitness_pkg/science.py           # 训练科学规则层（RPE/RIR、周组数、减载、停滞、缺口审计）
 ├── fitness_pkg/plan_science.py      # 22 周计划的科学化视图（组次解析/肌群归类/周组数判定/减载周展示）
+├── fitness_pkg/auto_plan.py         # 输入驱动方案生成（体测→训练计划+动作，预算→饮食+补剂）
+├── fitness_pkg/auto_plan_page.py    # 「自动方案」页面（参数收集 + 文本渲染，规则复用 auto_plan）
+├── auto_plan.py                     # 同一条链路的命令行入口（不读写个人数据）
 ├── ai_coach_engine.py               # AI 教练引擎（P0-L3/周期/复盘/接回/短版 + 规则层）
 ├── tests/                           # smoke_check.py 冒烟 + 单元/构造用例（缺 GUI 依赖自动跳过）
 ├── cairn/                           # ROADMAP 与开发日志（NPC 自动开发排期事实源）
@@ -384,7 +422,10 @@ python Lzheng-fitness/tools/install.py --platform codex --all
 # 冒烟: py_compile 全部核心模块 + 规则层断言 + 引擎端到端 + 4 项口径不变量
 python tests/smoke_check.py
 
-# 单元测试: RPE/RIR、e1RM 互逆、周组数与区间判定、周期/减载、组次解析、安全分流、复盘、接回、短版
+# 自动方案链路（无需 GUI）: 体测/预算校验、速度上限、减载不变量、份量标签、补剂红线
+python auto_plan.py --weight 74 --bodyfat 23 --target-weight 68 --target-bodyfat 15 --budget 1500 --height 175
+
+# 单元测试: RPE/RIR、e1RM 互逆、周组数与区间判定、周期/减载、组次解析、安全分流、复盘、接回、短版、自动方案
 python -m pytest tests
 python -m unittest discover -s tests   # 与上同源, 不装 pytest 时可用
 ```

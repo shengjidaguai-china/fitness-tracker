@@ -10,6 +10,8 @@ fitness_pkg — 健身监控模块化包 (v7.0)
   dialogs.py     动作详情弹窗
   ui_pages.py    5个UI页面
   ai_coach.py    AI 教练页面
+  auto_plan.py   输入驱动方案生成 (体测→训练计划, 预算→饮食与补剂)
+  auto_plan_page.py 自动方案页面
 
 导入约定 (v9.1 修正): 只有 GUI 子模块才需要 PySide6, 所以这里逐个软导入 ——
 无显示器 / 未装 PySide6 的环境 (CI、CLI 脚本、纯逻辑测试) 仍能 `import fitness_pkg`,
@@ -18,6 +20,13 @@ fitness_pkg — 健身监控模块化包 (v7.0)
 """
 
 from importlib.util import find_spec
+
+from .auto_plan import (
+    generate_diet_plan,
+    generate_training_plan,
+    validate_body_inputs,
+    validate_budget,
+)
 
 # ── 无 GUI 依赖的子模块 (CI / CLI / 纯逻辑测试都会用到) ──
 from .constants import (
@@ -43,6 +52,7 @@ if QT_GUI_AVAILABLE:  # pragma: no cover - 依赖运行环境
 
 try:  # pragma: no cover - 依赖运行环境
     from .ai_coach import AI_COACH_AVAILABLE, AICoachPage
+    from .auto_plan_page import AutoPlanPage
     from .dialogs import ExerciseDetailDialog
     from .ui_pages import (
         DashboardPage,
@@ -73,6 +83,10 @@ __all__ = [
     "BodyDataModel",
     "NutritionParser",
     "TrainingPlanParser",
+    "generate_diet_plan",
+    "generate_training_plan",
+    "validate_body_inputs",
+    "validate_budget",
     "week_display_meta",
     "weekly_set_band",
     "weekly_volume_status",
@@ -85,6 +99,7 @@ if GUI_AVAILABLE:  # pragma: no cover - 依赖运行环境
     __all__ += [
         "AI_COACH_AVAILABLE",
         "AICoachPage",
+        "AutoPlanPage",
         "DashboardPage",
         "ExerciseDetailDialog",
         "ExerciseLibraryPage",

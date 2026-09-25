@@ -20,6 +20,8 @@ a = Analysis(
     hiddenimports=[
         'ai_coach_engine',
         'fitness_modules',
+        'fitness_pkg.auto_plan',
+        'fitness_pkg.auto_plan_page',
         'PySide6.QtCore',
         'PySide6.QtGui',
         'PySide6.QtWidgets',

@@ -28,6 +28,8 @@ from fitness_pkg import (
     BodyDataModel,
     NutritionParser,
     TrainingPlanParser,
+    generate_diet_plan,
+    generate_training_plan,
 )
 
 if QT_GUI_AVAILABLE:
@@ -37,6 +39,7 @@ if GUI_AVAILABLE:
     from fitness_pkg import (
         AI_COACH_AVAILABLE,
         AICoachPage,
+        AutoPlanPage,
         DashboardPage,
         ExerciseDetailDialog,
         ExerciseLibraryPage,
@@ -62,6 +65,8 @@ __all__ = [
     "BodyDataModel",
     "NutritionParser",
     "TrainingPlanParser",
+    "generate_diet_plan",
+    "generate_training_plan",
 ]
 
 if QT_GUI_AVAILABLE:
@@ -70,6 +75,7 @@ if QT_GUI_AVAILABLE:
 if GUI_AVAILABLE:
     __all__ += [
         "AICoachPage",
+        "AutoPlanPage",
         "DashboardPage",
         "ExerciseDetailDialog",
         "ExerciseLibraryPage",

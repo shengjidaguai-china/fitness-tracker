@@ -8,7 +8,7 @@ import os
 from PyInstaller.utils.hooks import collect_submodules
 
 HERE = os.path.abspath('.')
-hiddenimports = ['ai_coach_engine', 'fitness_modules', 'fitness_pkg']
+hiddenimports = ['ai_coach_engine', 'fitness_modules', 'fitness_pkg', 'fitness_pkg.auto_plan', 'fitness_pkg.auto_plan_page']
 hiddenimports += collect_submodules('PySide6.QtSvg')
 hiddenimports += collect_submodules('PySide6.QtSvgWidgets')
 

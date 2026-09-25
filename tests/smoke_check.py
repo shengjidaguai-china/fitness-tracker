@@ -38,6 +38,9 @@ MODULES = [
     "fitness_pkg/ui_pages.py",
     "fitness_pkg/ai_coach.py",
     "fitness_pkg/science.py",
+    "fitness_pkg/auto_plan.py",
+    "fitness_pkg/auto_plan_page.py",
+    "auto_plan.py",
     "体脂体重监控_完整版.py",
 ]
 

@@ -2,6 +2,25 @@
 
 > 最新在顶部。每条 ≤ 20 行，仅摘要 + 指针。
 
+## 2026-09-25 第四轮: 输入驱动方案生成（Issue #5）
+- 新增 `fitness_pkg/auto_plan.py`（纯逻辑, 无 GUI/无 numpy/pandas 依赖）: 体测输入 → 训练计划 + 每日动作;
+  月度伙食费 → 每日饮食 + 补剂。`validate_body_inputs` / `validate_budget` / `body_composition_plan` /
+  `infer_level` / `generate_training_plan` / `generate_training_markdown` / `plan_energy` / `scale_meals` /
+  `budget_plan` / `generate_diet_plan` / `suggest_supplements` / `generate_diet_markdown`。
+- 口径自律: 组数区间/减载/温差判断全部调 `science` 与 `plan_science`, 视图层不另算一套。周组数结论来自
+  `weekly_volume_status`, 减载周沿用 W8/W13/W17/W21 且组数与 RPE 同步下调 (不变量已写进用例)。
+- 安全约束写进代码: 减脂周速度上限 1% 体重、增肌 0.25%; 目标再激进只延长周期 (`weeks` 收敛到 4 的倍数),
+  不加大缺口。体脂接近必需脂肪 (男 ≤5%/女 ≤12%) 直接提示不建议继续减脂。
+- 补剂侧只保留乳清/肌酸/维D3/鱼油/镁/锌, 每项写剂量上限与禁忌; 额度 ≤ 预算 15% 且 ≤25 元/天,
+  钱优先花在食物上; 燃脂丸/DNP/利尿剂等设为红线不碰项。饮食/训练两侧都列就医触发条件。
+- 新增 GUI 页 `fitness_pkg/auto_plan_page.py`「🧭 自动方案」(主程序 Tab 7), 与 CLI `auto_plan.py` 同源。
+  补测试时发现两个真 bug 并修掉: (1) 目标体重曾被去脂体重推算值覆盖, 导致「65→72kg 增重」被判成方向反转;
+  (2) 餐次份量曾按单价反推克数, 出现「香蕉 120 根 / 全麦面包 70 片」这类读不通、也算不出成本的标签。
+  现在方向判定优先采用用户填写值, 份量按固定档位表给并区分可数/按重食材。
+- 测试 223 通过（新增 61 项 `tests/test_auto_plan.py`）; `ruff check` + `ruff format --check` 全绿;
+  冒烟 4 组通过（模块清单已含新文件）。README 补「🧭 自动方案」章节与 CLI 用法。
+- 未动既有页面布局与口径; `auto_plan.py` 命令行入口不读写任何个人数据。
+
 ## 2026-09-16 第三轮: 规则层接入 22 周计划视图 + 验证链路修复（Issue #1「继续」）
 - 新增 `fitness_pkg/plan_science.py`（F9 规则层侧）: `parse_group_spec`（组次文本容错解析）、`muscle_bucket_of`、
   `estimate_muscle_sets` / `estimate_weekly_sets`、`weekly_volume_status`、`week_display_meta`、`deload_guidance`、

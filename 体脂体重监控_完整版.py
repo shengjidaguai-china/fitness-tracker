@@ -27,6 +27,7 @@ from fitness_modules import (
     AI_COACH_AVAILABLE,
     COLORS,
     AICoachPage,
+    AutoPlanPage,
     BodyDataModel,
     DashboardPage,
     ExerciseLibrary,
@@ -83,6 +84,9 @@ class MainWindow(QMainWindow):
 
         self.page_nutrition = NutritionPage()
         self.tabs.add_page(self.page_nutrition, "饮食与补剂", "nav_nutrition", "🍽")
+
+        self.page_auto_plan = AutoPlanPage()
+        self.tabs.add_page(self.page_auto_plan, "自动方案", "nav_auto_plan", "🧭")
 
         if AI_COACH_AVAILABLE:
             self.page_coach = AICoachPage()
