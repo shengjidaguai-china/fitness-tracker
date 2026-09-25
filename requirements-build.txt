@@ -1,0 +1,18 @@
+# 健身监控 v9.1 — Windows 打包依赖（PyInstaller 封装 exe 用）
+# 用法: pip install -r requirements-build.txt
+#
+# 说明:
+#   - 运行时依赖与 pyproject.toml 的 [project].dependencies 对齐;
+#     这里显式列全, 是为了让 CI 打包环境与本地一致, 避免漏装导致 exe 缺模块。
+#   - pytest / ruff 等开发依赖不进打包环境 (被 PyInstaller excludes 排除, 装了反而增大排查面)。
+#
+# 版本下限跟随 pyproject.toml, 不写死补丁号, 让构建机拿最新兼容版。
+
+PySide6>=6.5
+pandas>=1.3
+numpy>=1.20
+matplotlib>=3.4
+Pillow>=8.0
+
+# 打包工具
+pyinstaller>=6.0

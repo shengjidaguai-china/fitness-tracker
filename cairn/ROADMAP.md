@@ -4,6 +4,7 @@
 > 若此文件不存在，NPC 会回退读取 README.md 与仓库 Issues。
 
 ## 最新状态同步
+- 2026-09-25 (第五轮, Issue #5): 新增 Windows 发版流水线 `.cnb.yml` → `$ / tag_push / windows-exe-release` —— 推送 Tag 自动打包 exe 并归档到 Release 附件。调度到根组织自托管 Windows 构建机 (`runner.namespace: group` + `tags: [windows, win-x64]`, 平台官方节点只有 Linux), 复用仓库既有 `健身监控v9.0.spec` 保证与本地打包一致; 新增 `requirements-build.txt` 统一打包依赖。**前置条件**: 根组织需已接入 Windows 构建节点 (标签含 `windows`), 未接入时该流水线会直接失败。README 下载指引从 GitHub Releases 修正到本仓 Releases (`https://cnb.cool/yuppiez328/fitness-tracker/-/releases`), 顶部徽章/clone 地址/授权联系方式/BibTeX 一并指向本仓。护栏: `.cnb.yml` 通过 cnb-pipeline 校验器 (语法/语义/Schema) 三关全绿; 真机发包需待 Windows 节点接入后推 tag 实测。
 - 2026-09-25 (第四轮, Issue #5): 新增 `fitness_pkg/auto_plan.py` —— **输入驱动方案生成**。体测输入 (当前/目标体重体脂) → 训练计划 + 每日训练动作 (方向/周期/P0–L3 等级/每周分化/组×次×RPE); 月度伙食费预算 → 每日饮食计划 (热量+宏量+六餐份量+采购参考) + 补剂方案 (剂量上限与禁忌 + 红线不碰项)。速度上限 (减脂 1%/周、增肌 0.25%/周) 与周组数区间全部走既有规则层, 视图层不另算。新增 GUI 页「🧭 自动方案」与 CLI `auto_plan.py` (同源, 不读写个人数据)。补测试时修掉两个真 bug: 目标体重被推算值覆盖导致方向反转、餐次份量按单价反推出读不通的标签。护栏: 测试 162→223 项全通过, `ruff check` 与 `ruff format --check` 全绿, 冒烟 4 组通过。
 - 2026-09-16 (第三轮, Issue #1): 新增 `fitness_pkg/plan_science.py` —— 把规则层接到 22 周计划视图 (F9)。原来的组次解析只在 GUI 详情弹窗里有, 现在有了可测试的纯逻辑层: `parse_group_spec` / `muscle_bucket_of` / `estimate_weekly_sets` / `weekly_volume_status` / `week_display_meta` / `deload_guidance`。**只按 Helms 的「组/周/肌群」下结论**: 周计划正文写的是「单次训练该动作做几组」, 不是周组数, 所以解析到几个训练日就除以几, 休息周直接返回「不判定」而不是误报「练得太少」。同时修掉阻塞验证的三个工程问题: `import fitness_pkg` 不再强依赖 PySide6 (缺依赖时降级并在 `GUI_AVAILABLE`/`GUI_IMPORT_ERROR` 里给原因)、`unittest discover` 不再对 UI 用例报假失败、`data_model.predict_target_date` 的 numpy object dtype 崩溃。护栏: 测试 141→152 项全通过 (含 39 项新用例), `ruff check` 与 `ruff format --check` 全绿, 冒烟 4 组通过; 补测试后计数说明改为「测试用例数由采集结果给出, 不再写死数字」, 防止文档再次漂移。
 - 2026-09-16: 规则层「科学化」第二轮（Issue #1，PR #3）。新增 `tests/`（冒烟 + 引擎/规则层/数据层用例）；修正 e1RM 余力口径；补周期/频率/周组数自检、逐组 RPE 路径、热身与检查点、节律减载周、RPE 触发的减载信号、危险信号暂停、48 小时接回首步、5/2 分钟短版；持久化改为原子写 + 编码探测 + 损坏备份；收敛 3 个 PyInstaller spec 为「主 + 调试」两套；README 结构与实际代码对齐（移除失效 Star History、修正文件名/结构描述）。
@@ -29,8 +30,11 @@
 - F10: `generate_report.py` 的健壮性与本地数据隔离校验纳入测试（原 F3 的具体化）
 - ~~F11: 输入驱动方案生成（体测→训练计划+动作, 预算→饮食+补剂）~~ → 已完成（`fitness_pkg/auto_plan.py` + GUI 页 + CLI + 61 项用例）
 - F12: 自动方案接入报告输出与减载-饮食联动
+- ~~F13: Windows 发版流水线 (推 tag 自动打包 exe 并归档) + README 下载指引修正~~ → 已完成 (`$ / tag_push / windows-exe-release` + `requirements-build.txt`; README 已指向本仓 Releases); **遗留**: 根组织自托管 Windows 构建节点接入后需推 tag 实测一次
+- F14: 为 exe 产物加校验与版本信息 (Release 附件附 SHA256; exe 版本号从 tag 注入, 不再硬编码 v9.0)
 
 ## 开放问题
+- Windows 构建节点是否接入 (未接入时 `windows-exe-release` 流水线无可用节点, 推送 tag 会失败)
 - 是否引入 ruff/mypy 作为门禁（当前仅有 py_compile 基础校验）
 - 子模块 (Lzheng-fitness / exercises-dataset) 的版本钉定策略
 - 云端无 GUI，GUI 改动如何做冒烟验证（建议本地 Windows + 截图，或用 `QT_QPA_PLATFORM=offscreen`）

@@ -2,6 +2,26 @@
 
 > 最新在顶部。每条 ≤ 20 行，仅摘要 + 指针。
 
+## 2026-09-25 第五轮: Windows 发版流水线 + README 下载指引修正（Issue #5）
+- `.cnb.yml` 新增 `$ / tag_push / windows-exe-release` 流水线: 推送 tag 自动打包 exe 并归档。
+  4 个 stage: `pip install -r requirements-build.txt` → `PyInstaller 健身监控v9.0.spec` (复用仓库既有 spec,
+  避免本地与 CI 两套打包参数漂移) → 校验 exe 存在 → `Compress-Archive` 打 zip
+  (`健身监控-<tag>-windows-x64.zip`) → `git:release` 发 Release → `cnbcool/attachments` 把 zip 传为 Release
+  附件 (页面内可下载)。
+- **调度到自托管 Windows 构建机**: `runner.namespace: group` + `tags: [windows, win-x64]`。
+  平台官方节点只有 amd64/arm64 Linux, 打不出 Windows exe; 因此本条流水线依赖根组织已接入 Windows 节点,
+  没命中节点时直接失败 (不静默回退 Linux 产出无效产物)。前置条件与标签约定写进了 `.cnb.yml` 注释。
+- **如实提示**: CNB 制品库页面里的制品都是包管理器/OCI 类型 (Docker/Helm/npm/PyPI 等), 没有「通用文件
+  zip」这一类; exe 的公开交付出口是 Release 附件 (所需 token 仅是临时票据, 且公开仓可直接下载)。
+  zip 同时留在构建工作区, 构件页可下载留档。README 也按这个口径写。
+- 新增 `requirements-build.txt`: 打包依赖清单, 本地与 CI 共用。
+- README 下载指引修正: 「方式一·免安装运行」改为本仓 Releases
+  (`https://cnb.cool/yuppiez328/fitness-tracker/-/releases`), 并写明附件命名与来源; 顶部 Version 徽章、
+  clone 地址、商业授权联系方式、BibTeX url 一并从 GitHub 指向本仓; 另补「推 tag 让流水线打包」的说明。
+  子模块地址 (Lzheng-fitness / exercises-dataset) 保持 GitHub, 那是真实上游, 未改。
+- 护栏: `.cnb.yml` 通过 cnb-pipeline 校验器三关 (YAML 语法 / 语义 / Schema) 全绿。
+  流水线真机验证需等根组织 Windows 构建节点接入后推 tag 实测。
+
 ## 2026-09-25 第四轮: 输入驱动方案生成（Issue #5）
 - 新增 `fitness_pkg/auto_plan.py`（纯逻辑, 无 GUI/无 numpy/pandas 依赖）: 体测输入 → 训练计划 + 每日动作;
   月度伙食费 → 每日饮食 + 补剂。`validate_body_inputs` / `validate_budget` / `body_composition_plan` /
