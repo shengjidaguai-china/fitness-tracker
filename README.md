@@ -8,7 +8,7 @@
 
 **如果健身监控对你有帮助，请点一个 Star。你的 Star 会帮助更多独立开发者发现它。**
 
-> 上游仓库：[GitHub · shengjidaguai-china/fitness-tracker](https://github.com/shengjidaguai-china/fitness-tracker)；本仓 [CNB 镜像](https://cnb.cool/yuppiez328/fitness-tracker) 跑 NPC 自动开发，Tag 触发流水线出 exe。
+> 上游仓库：[GitHub · shengjidaguai-china/fitness-tracker](https://github.com/shengjidaguai-china/fitness-tracker)
 
 [![健身监控架构](docs/fitness-arch.visual-check.1440x900.light.png)](docs/fitness-arch.html)
 
